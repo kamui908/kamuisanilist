@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body className="bg-dark">{children}</body>
+      <body style={{ background: "#f9f9f9" }}>{children}</body>
     </html>
   );
 }

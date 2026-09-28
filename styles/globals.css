@@ -1,16 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Design-it Midnight Luxury tokens */
+/* Design-it Modern Editorial tokens (light, high-contrast, magazine) */
 :root {
-  --rl-bg: #0a0a0a;
-  --rl-elev-1: #1c1c1c;
-  --rl-elev-2: #242424;
-  --rl-text: #f5f5f0;
-  --rl-muted: rgba(245, 245, 240, 0.6);
-  --rl-accent: #b59a5f;
-  --rl-accent-soft: rgba(181, 154, 95, 0.14);
-  --rl-border: rgba(255, 255, 255, 0.07);
+  --rl-bg: #f9f9f9;
+  --rl-elev-1: #ffffff;
+  --rl-elev-2: #f1f1f1;
+  --rl-text: #121212;
+  --rl-muted: rgba(18, 18, 18, 0.6);
+  --rl-accent: #d44a3a;
+  --rl-accent-soft: rgba(212, 74, 58, 0.1);
+  --rl-border: rgba(18, 18, 18, 0.1);
 }
 
 /* Global styles */
@@ -57,15 +57,23 @@ button {
 
 .anime-list:hover {
   transform: translateY(-4px);
-  background-color: var(--rl-elev-2) !important;
-  border-color: rgba(181, 154, 95, 0.35) !important;
+  background-color: var(--rl-elev-1) !important;
+  border-color: rgba(212, 74, 58, 0.4) !important;
+  box-shadow: 0 8px 24px rgba(18, 18, 18, 0.08);
+}
+
+.anime-list {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
 }
 
 .anime-list img {
   width: 100% !important;
-  height: 320px !important;
+  height: auto !important;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 0 !important;
+  background: #e8e8e8;
 }
 
 /* Headings — Sora display, Inter body */
@@ -103,11 +111,11 @@ button {
 .badge-accent {
   background: var(--rl-accent-soft) !important;
   color: var(--rl-accent) !important;
-  border: 1px solid rgba(181, 154, 95, 0.3);
+  border: 1px solid rgba(212, 74, 58, 0.3);
 }
 
 .badge-muted-dark {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: rgba(18, 18, 18, 0.05) !important;
   color: var(--rl-muted) !important;
   border: 1px solid var(--rl-border);
 }
@@ -125,13 +133,13 @@ button {
 
 .filter-pill:hover {
   color: var(--rl-text) !important;
-  border-color: rgba(181, 154, 95, 0.5) !important;
+  border-color: rgba(212, 74, 58, 0.5) !important;
 }
 
 .filter-pill.active {
   background: var(--rl-accent-soft) !important;
   color: var(--rl-accent) !important;
-  border-color: rgba(181, 154, 95, 0.5) !important;
+  border-color: rgba(212, 74, 58, 0.5) !important;
 }
 
 .filter-clear {
@@ -151,13 +159,13 @@ button {
 .btn-hero {
   background: var(--rl-accent) !important;
   border: none !important;
-  color: #0a0a0a !important;
+  color: #fff !important;
   font-weight: 600 !important;
   border-radius: 10px !important;
   padding: 14px 36px !important;
 }
 
-/* Skeleton shimmer */
+/* Skeleton shimmer (light) */
 .skeleton-card {
   background: var(--rl-elev-1);
   border: 1px solid var(--rl-border);
@@ -166,7 +174,7 @@ button {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #1c1c1c 25%, #242424 50%, #1c1c1c 75%);
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }

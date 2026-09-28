@@ -10,6 +10,7 @@ export default function Home() {
   const [type, setType] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(24);
 
   useEffect(() => {
     async function fetchData() {
@@ -98,24 +99,35 @@ export default function Home() {
         ? prev.filter((f) => f !== filter)
         : [...prev, filter]
     );
+    setVisibleCount(24);
   }
+
+  function resetAll() {
+    setSelectedFilters([]);
+    setType("All");
+    setVisibleCount(24);
+  }
+
+  const visible = filtered.slice(0, visibleCount);
 
   return (
     <>
-      {/* Intro — Midnight Luxury, 82vh, single accent CTA */}
+      {/* Intro — Modern Editorial, compact, no animated glow (perf) */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
-        style={{ minHeight: "82vh", background: "var(--rl-bg)" }}
+        style={{ minHeight: "62vh", background: "var(--rl-bg)" }}
       >
         <DotPattern
-          glow={true}
+          glow={false}
+          width={28}
+          height={28}
           className={cn(
-            "text-white/10 [mask-image:radial-gradient(700px_circle_at_center,white,transparent)]"
+            "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
           )}
         />
         <div className="position-relative px-3" style={{ maxWidth: 720 }}>
           <h1 className="display-2 fw-bold mb-3 title" style={{ fontSize: "clamp(2.75rem, 7vw, 4.5rem)" }}>
-            <AuroraText colors={["#B59A5F", "#F5F5F0", "#8A9A86", "#B59A5F"]}>
+            <AuroraText colors={["#D44A3A", "#121212", "#8F8F8F", "#D44A3A"]} speed={0.5}>
               Gura-io
             </AuroraText>
           </h1>
@@ -162,7 +174,7 @@ export default function Home() {
             style={{
               background: "var(--rl-accent-soft)",
               color: "var(--rl-accent)",
-              border: "1px solid rgba(181,154,95,.3)",
+              border: "1px solid rgba(212,74,58,.3)",
             }}
           >
             {loading ? "…" : `${filtered.length} anime`}
@@ -177,7 +189,10 @@ export default function Home() {
             </label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => {
+                setType(e.target.value);
+                setVisibleCount(24);
+              }}
               className="form-select dark-select"
             >
               {formats.map((t) => (
@@ -195,10 +210,7 @@ export default function Home() {
               </label>
               {selectedFilters.length > 0 && (
                 <button
-                  onClick={() => {
-                    setSelectedFilters([]);
-                    setType("All");
-                  }}
+                  onClick={resetAll}
                   className="btn btn-sm filter-clear"
                   style={{
                     background: "transparent",
@@ -257,7 +269,7 @@ export default function Home() {
           <div className="anime-grid" aria-label="Loading">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="skeleton-card">
-                <div className="skeleton-shimmer" style={{ height: 320 }} />
+                <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
                 <div className="p-3">
                   <div className="skeleton-shimmer rounded mb-2" style={{ height: 16, width: "80%" }} />
                   <div className="skeleton-shimmer rounded" style={{ height: 12, width: "50%" }} />
@@ -266,50 +278,70 @@ export default function Home() {
             ))}
           </div>
         ) : (
-          <div className="anime-grid">
-            {filtered.map((anime) => (
-              <div key={anime.id} className="h-100">
-                <a
-                  href={anime.siteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-decoration-none"
-                  aria-label={anime.title.english || anime.title.romaji}
-                >
-                  <div className="d-flex h-100 anime-list">
-                    <img
-                      src={anime.coverImage.large}
-                      alt={anime.title.romaji}
-                      loading="lazy"
-                    />
-                    <div className="flex-grow-1 p-3 d-flex flex-column">
-                      <h6 className="mb-2 font-heading">
-                        {anime.title.english || anime.title.romaji}
-                      </h6>
-                      <p className="mb-1 font-score">
-                        ★ {anime.averageScore ?? "N/A"}
-                        <span className="font-meta ms-2">
-                          {anime.episodes ?? "?"} eps
-                        </span>
-                      </p>
-                      <div className="mt-auto pt-2 d-flex flex-wrap gap-1">
-                        {anime.format && (
-                          <span className="badge font-badge badge-accent">
-                            {anime.format}
+          <>
+            <div className="anime-grid">
+              {visible.map((anime, i) => (
+                <div key={anime.id} className="h-100">
+                  <a
+                    href={anime.siteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-decoration-none"
+                    aria-label={anime.title.english || anime.title.romaji}
+                  >
+                    <div className="d-flex h-100 anime-list">
+                      <img
+                        src={anime.coverImage.large}
+                        alt={anime.title.romaji}
+                        loading={i < 4 ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchPriority={i < 4 ? "high" : "low"}
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        width="460"
+                        height="613"
+                      />
+                      <div className="flex-grow-1 p-3 d-flex flex-column">
+                        <h6 className="mb-2 font-heading">
+                          {anime.title.english || anime.title.romaji}
+                        </h6>
+                        <p className="mb-1 font-score">
+                          ★ {anime.averageScore ?? "N/A"}
+                          <span className="font-meta ms-2">
+                            {anime.episodes ?? "?"} eps
                           </span>
-                        )}
-                        {anime.status && (
-                          <span className="badge font-badge badge-muted-dark">
-                            {anime.status.replace(/_/g, " ")}
-                          </span>
-                        )}
+                        </p>
+                        <div className="mt-auto pt-2 d-flex flex-wrap gap-1">
+                          {anime.format && (
+                            <span className="badge font-badge badge-accent">
+                              {anime.format}
+                            </span>
+                          )}
+                          {anime.status && (
+                            <span className="badge font-badge badge-muted-dark">
+                              {anime.status.replace(/_/g, " ")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </a>
+                  </a>
+                </div>
+              ))}
+            </div>
+            {visibleCount < filtered.length && (
+              <div className="text-center mt-4">
+                <p className="small mb-2" style={{ color: "var(--rl-muted)" }}>
+                  Showing {visible.length} of {filtered.length}
+                </p>
+                <button
+                  onClick={() => setVisibleCount((c) => c + 24)}
+                  className="btn btn-hero"
+                >
+                  Show more
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {!loading && !error && filtered.length === 0 && (
@@ -328,10 +360,7 @@ export default function Home() {
               Try removing a genre or resetting the format.
             </p>
             <button
-              onClick={() => {
-                setSelectedFilters([]);
-                setType("All");
-              }}
+              onClick={resetAll}
               className="btn btn-sm btn-hero"
             >
               Reset filters
