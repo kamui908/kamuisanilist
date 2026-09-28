@@ -20,7 +20,7 @@ export default function LoginPage() {
       </Head>
 
       <section className="min-vh-100 d-flex flex-column justify-content-center align-items-center text-center bg-dark text-white">
-        <h1 className="display-1 fw-bold mb-3">Gura-io</h1>
+        <h1 className="display-1 fw-bold mb-3">Kamui</h1>
         <p className="lead mb-4">Multi session WhatsApp bot built for Enterprise-grade performance.</p>
         <a href="#username" className="btn btn-danger btn-lg rounded-0">Get Started</a>
       </section>

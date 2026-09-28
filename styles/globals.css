@@ -116,6 +116,24 @@ button {
 .anime-list .font-meta { font-size: 0.75rem; }
 .anime-list .font-badge { font-size: 0.65rem; }
 
+/* Hero scroll cue */
+.scroll-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rl-muted);
+  animation: cue-bob 2s ease-in-out infinite;
+}
+@keyframes cue-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue { animation: none; }
+  .anime-list, .filter-pill { transition: none; }
+}
+
 /* Sticky topbar + theme toggle */
 .topbar {
   position: sticky;
@@ -136,36 +154,52 @@ button {
   font-weight: 600;
 }
 
-/* Headings — Sora display, Inter body */
+/* Headings — Sora display, Space Grotesk eyebrows/labels, Inter body */
 .font-heading {
   font-family: 'Sora', 'Inter', sans-serif;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--rl-text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-height: 2.4em;
 }
 
-/* Score text — desaturated gold */
+.font-eyebrow {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.font-alt {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+/* Score text — Space Grotesk numerals */
 .font-score {
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--rl-accent);
 }
 
 /* Meta info (episodes, etc.) */
 .font-meta {
-  font-size: 0.85rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.75rem;
   color: var(--rl-muted);
 }
 
-/* Badges — desaturated, no vibrating Bootstrap primaries */
+/* Badges — Space Grotesk labels */
 .font-badge {
-  font-size: 0.72rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.65rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 .badge-accent {
