@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Design-it: 2 families max — Sora for display, Inter for body */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -17,8 +17,13 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700&display=swap"
           rel="stylesheet"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("rl-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
+          }}
+        />
       </head>
-      <body style={{ background: "#f9f9f9" }}>{children}</body>
+      <body style={{ background: "var(--rl-bg)" }}>{children}</body>
     </html>
   );
 }

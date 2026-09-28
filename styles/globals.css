@@ -3,6 +3,7 @@
 
 /* Design-it Modern Editorial tokens (light, high-contrast, magazine) */
 :root {
+  color-scheme: light;
   --rl-bg: #f9f9f9;
   --rl-elev-1: #ffffff;
   --rl-elev-2: #f1f1f1;
@@ -11,6 +12,22 @@
   --rl-accent: #d44a3a;
   --rl-accent-soft: rgba(212, 74, 58, 0.1);
   --rl-border: rgba(18, 18, 18, 0.1);
+  --rl-img-bg: #e8e8e8;
+  --rl-shadow: 0 8px 24px rgba(18, 18, 18, 0.08);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --rl-bg: #0a0a0a;
+  --rl-elev-1: #1c1c1c;
+  --rl-elev-2: #242424;
+  --rl-text: #f5f5f0;
+  --rl-muted: rgba(245, 245, 240, 0.6);
+  --rl-accent: #e06a5a;
+  --rl-accent-soft: rgba(224, 106, 90, 0.14);
+  --rl-border: rgba(255, 255, 255, 0.08);
+  --rl-img-bg: #242424;
+  --rl-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 /* Global styles */
@@ -39,11 +56,25 @@ button {
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dark theme anime cards — card-based-design + dark-mode: elevation via lightness */
+/* Dense responsive grid — small cards, more per row */
 .anime-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .anime-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .anime-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 18px;
+  }
 }
 
 .anime-list {
@@ -58,13 +89,13 @@ button {
 .anime-list:hover {
   transform: translateY(-4px);
   background-color: var(--rl-elev-1) !important;
-  border-color: rgba(212, 74, 58, 0.4) !important;
-  box-shadow: 0 8px 24px rgba(18, 18, 18, 0.08);
+  border-color: var(--rl-accent) !important;
+  box-shadow: var(--rl-shadow);
 }
 
 .anime-list {
   content-visibility: auto;
-  contain-intrinsic-size: auto 480px;
+  contain-intrinsic-size: auto 380px;
 }
 
 .anime-list img {
@@ -73,7 +104,36 @@ button {
   aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 0 !important;
-  background: #e8e8e8;
+  background: var(--rl-img-bg);
+}
+
+/* Compact card type */
+.anime-list .font-heading {
+  font-size: 0.85rem;
+  min-height: 2.4em;
+}
+.anime-list .font-score { font-size: 0.8rem; }
+.anime-list .font-meta { font-size: 0.75rem; }
+.anime-list .font-badge { font-size: 0.65rem; }
+
+/* Sticky topbar + theme toggle */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--rl-bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rl-border);
+}
+
+.theme-toggle {
+  border: 1px solid var(--rl-border) !important;
+  background: var(--rl-elev-1) !important;
+  color: var(--rl-text) !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600;
 }
 
 /* Headings — Sora display, Inter body */

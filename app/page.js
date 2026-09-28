@@ -1,8 +1,11 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 30;
 
 export default function Home() {
   const [animeList, setAnimeList] = useState([]);
@@ -10,7 +13,23 @@ export default function Home() {
   const [type, setType] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(24);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    const current =
+      document.documentElement.getAttribute("data-theme") || "light";
+    setTheme(current);
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("rl-theme", next);
+    } catch {}
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -99,19 +118,38 @@ export default function Home() {
         ? prev.filter((f) => f !== filter)
         : [...prev, filter]
     );
-    setVisibleCount(24);
+    setVisibleCount(PAGE_SIZE);
   }
 
   function resetAll() {
     setSelectedFilters([]);
     setType("All");
-    setVisibleCount(24);
+    setVisibleCount(PAGE_SIZE);
   }
 
   const visible = filtered.slice(0, visibleCount);
+  const auroraColors =
+    theme === "dark"
+      ? ["#e06a5a", "#f5f5f0", "#8a9a86", "#e06a5a"]
+      : ["#D44A3A", "#121212", "#8F8F8F", "#D44A3A"];
 
   return (
     <>
+      {/* Sticky topbar with theme switch */}
+      <header className="topbar">
+        <div className="container d-flex justify-content-between align-items-center py-2">
+          <Link href="/" className="text-decoration-none fw-bold title" style={{ color: "var(--rl-text)" }}>
+            Gura-io
+          </Link>
+          <button
+            onClick={toggleTheme}
+            className="theme-toggle"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+          </button>
+        </div>
+      </header>
       {/* Intro — Modern Editorial, compact, no animated glow (perf) */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
@@ -122,12 +160,14 @@ export default function Home() {
           width={28}
           height={28}
           className={cn(
-            "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
+            theme === "dark"
+              ? "text-white/[0.08] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
+              : "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
           )}
         />
         <div className="position-relative px-3" style={{ maxWidth: 720 }}>
           <h1 className="display-2 fw-bold mb-3 title" style={{ fontSize: "clamp(2.75rem, 7vw, 4.5rem)" }}>
-            <AuroraText colors={["#D44A3A", "#121212", "#8F8F8F", "#D44A3A"]} speed={0.5}>
+            <AuroraText colors={auroraColors} speed={0.5}>
               Gura-io
             </AuroraText>
           </h1>
@@ -191,7 +231,7 @@ export default function Home() {
               value={type}
               onChange={(e) => {
                 setType(e.target.value);
-                setVisibleCount(24);
+                setVisibleCount(PAGE_SIZE);
               }}
               className="form-select dark-select"
             >
@@ -282,10 +322,8 @@ export default function Home() {
             <div className="anime-grid">
               {visible.map((anime, i) => (
                 <div key={anime.id} className="h-100">
-                  <a
-                    href={anime.siteUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <Link
+                    href={`/anime/${anime.id}`}
                     className="text-decoration-none"
                     aria-label={anime.title.english || anime.title.romaji}
                   >
@@ -293,15 +331,15 @@ export default function Home() {
                       <img
                         src={anime.coverImage.large}
                         alt={anime.title.romaji}
-                        loading={i < 4 ? "eager" : "lazy"}
+                        loading={i < 6 ? "eager" : "lazy"}
                         decoding="async"
-                        fetchPriority={i < 4 ? "high" : "low"}
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        fetchPriority={i < 6 ? "high" : "low"}
+                        sizes="(max-width: 768px) 33vw, (max-width: 1200px) 25vw, 16vw"
                         width="460"
                         height="613"
                       />
-                      <div className="flex-grow-1 p-3 d-flex flex-column">
-                        <h6 className="mb-2 font-heading">
+                      <div className="flex-grow-1 p-2 d-flex flex-column">
+                        <h6 className="mb-1 font-heading">
                           {anime.title.english || anime.title.romaji}
                         </h6>
                         <p className="mb-1 font-score">
@@ -310,21 +348,16 @@ export default function Home() {
                             {anime.episodes ?? "?"} eps
                           </span>
                         </p>
-                        <div className="mt-auto pt-2 d-flex flex-wrap gap-1">
+                        <div className="mt-auto pt-1 d-flex flex-wrap gap-1">
                           {anime.format && (
                             <span className="badge font-badge badge-accent">
                               {anime.format}
                             </span>
                           )}
-                          {anime.status && (
-                            <span className="badge font-badge badge-muted-dark">
-                              {anime.status.replace(/_/g, " ")}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
-                  </a>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -334,7 +367,7 @@ export default function Home() {
                   Showing {visible.length} of {filtered.length}
                 </p>
                 <button
-                  onClick={() => setVisibleCount((c) => c + 24)}
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                   className="btn btn-hero"
                 >
                   Show more
