@@ -1,126 +1,215 @@
 "use client";
-import React, { useState } from "react";
-import Link from "next/link";
-import Head from "next/head";
-import { GradientText } from "@/components/animate-ui/text/gradient";
+import React, { useState, useEffect, useMemo } from "react";
 import { AuroraText } from "@/components/magicui/aurora-text";
-import { useEffect } from "react";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
   const [animeList, setAnimeList] = useState([]);
-  const [selectedFilters, setSelectedFilters] = useState([]); // ✅ merged genres + tags
+  const [selectedFilters, setSelectedFilters] = useState([]);
   const [type, setType] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-  async function fetchData() {
-    const query = `
-      query ($username: String) {
-        MediaListCollection(userName: $username, type: ANIME) {
-          lists {
-            entries {
-              media {
-                id
-                title { romaji english }
-                coverImage { large }
-                genres
-                tags { name }
-                averageScore
-                episodes
-                status
-                format
-                siteUrl
+    async function fetchData() {
+      const query = `
+        query ($username: String) {
+          MediaListCollection(userName: $username, type: ANIME) {
+            lists {
+              entries {
+                media {
+                  id
+                  title { romaji english }
+                  coverImage { large }
+                  genres
+                  tags { name }
+                  averageScore
+                  episodes
+                  status
+                  format
+                  siteUrl
+                }
               }
             }
           }
         }
+      `;
+
+      try {
+        setLoading(true);
+        const res = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, variables: { username: "RyouGura" } }),
+        });
+        if (!res.ok) throw new Error(`AniList responded ${res.status}`);
+        const data = await res.json();
+        const entries =
+          data.data?.MediaListCollection?.lists?.flatMap((l) => l.entries) ?? [];
+        setAnimeList(entries.map((e) => e.media).filter(Boolean));
+      } catch (e) {
+        setError(e.message || "Failed to load list");
+      } finally {
+        setLoading(false);
       }
-    `;
+    }
 
-    const variables = { username: "RyouGura" };
+    fetchData();
+  }, []);
 
-    const res = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables }),
+  const { allFilters, filterCounts, formats } = useMemo(() => {
+    const genres = [...new Set(animeList.flatMap((a) => a.genres ?? []))].sort();
+    const counts = {};
+    animeList.forEach((a) => {
+      (a.genres ?? []).forEach((g) => {
+        counts[g] = (counts[g] || 0) + 1;
+      });
+      (a.tags ?? []).forEach((t) => {
+        if (t.name?.toLowerCase() === "isekai") {
+          counts["isekai"] = (counts["isekai"] || 0) + 1;
+        }
+      });
     });
+    const filters = [...new Set([...genres, "isekai"])].sort();
+    const fmt = ["All", ...new Set(animeList.map((a) => a.format).filter(Boolean))];
+    return { allFilters: filters, filterCounts: counts, formats: fmt };
+  }, [animeList]);
 
-    const data = await res.json();
-    const entries = data.data.MediaListCollection.lists.flatMap(
-      (l) => l.entries
+  const filtered = useMemo(() => {
+    return animeList.filter((anime) => {
+      const matchesFilters =
+        selectedFilters.length === 0 ||
+        selectedFilters.every(
+          (f) =>
+            (anime.genres ?? []).includes(f) ||
+            (anime.tags ?? []).some(
+              (t) => t.name?.toLowerCase() === f.toLowerCase()
+            )
+        );
+      const matchesType = type === "All" || anime.format === type;
+      return matchesFilters && matchesType;
+    });
+  }, [animeList, selectedFilters, type]);
+
+  function toggleFilter(filter) {
+    setSelectedFilters((prev) =>
+      prev.includes(filter)
+        ? prev.filter((f) => f !== filter)
+        : [...prev, filter]
     );
-    setAnimeList(entries.map((e) => e.media));
   }
-
-  fetchData();
-}, []);
-
-// ✅ Filtering (check both genres and tags)
-const filtered = animeList.filter((anime) => {
-  const matchesFilters =
-    selectedFilters.length === 0 ||
-    selectedFilters.every(
-      (f) =>
-        anime.genres.includes(f) ||
-        anime.tags.some((t) => t.name.toLowerCase() === f.toLowerCase())
-    );
-
-  const matchesType = type === "All" || anime.format === type;
-  return matchesFilters && matchesType;
-});
-
-// ✅ Collect unique genres + tags
-const allGenres = [...new Set(animeList.flatMap((a) => a.genres))];
-const allTags = [...new Set(animeList.flatMap((a) => a.tags.map((t) => t.name)))];
-
-// ✅ Add only "isekai" tag manually
-const allFilters = [...new Set([...allGenres, "isekai"])];
-// if you want to allow ALL tags, replace the above with:
-// const allFilters = [...new Set([...allGenres, ...allTags, "isekai"])];
-
-// ✅ Toggle genre/tag
-function toggleFilter(filter) {
-  setSelectedFilters((prev) =>
-    prev.includes(filter)
-      ? prev.filter((f) => f !== filter)
-      : [...prev, filter]
-  );
-}
-
 
   return (
     <>
-      {/* Intro Section */}
-      <section className="min-vh-100 d-flex flex-column justify-content-center align-items-center text-center bg-dark text-white">
-        <DotPattern glow={true} className={cn("[mask-image:radial-gradient(2000px_circle_at_center,transparent,white)]")} />
-        <h1 className="display-1 fw-bold mb-3"><AuroraText>Gura-io</AuroraText></h1>
-        <p className="lead mb-4 container"><b>Welcome to My Anime List!</b><br />
-          Here you'll find a collection of anime I've explored, sorted by genre, tag and type. Use the filters to discover shows that match your vibe — whether it’s action-packed adventures, heartfelt dramas, or even a classic isekai journey.</p>
-        <a href="#list" className="btn btn-danger btn-lg rounded-0">Get Started</a>
+      {/* Intro — Midnight Luxury, 82vh, single accent CTA */}
+      <section
+        className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
+        style={{ minHeight: "82vh", background: "var(--rl-bg)" }}
+      >
+        <DotPattern
+          glow={true}
+          className={cn(
+            "text-white/10 [mask-image:radial-gradient(700px_circle_at_center,white,transparent)]"
+          )}
+        />
+        <div className="position-relative px-3" style={{ maxWidth: 720 }}>
+          <h1 className="display-2 fw-bold mb-3 title" style={{ fontSize: "clamp(2.75rem, 7vw, 4.5rem)" }}>
+            <AuroraText colors={["#B59A5F", "#F5F5F0", "#8A9A86", "#B59A5F"]}>
+              Gura-io
+            </AuroraText>
+          </h1>
+          <p className="lead mb-2" style={{ color: "var(--rl-text)" }}>
+            <b>Welcome to My Anime List!</b>
+          </p>
+          <p className="mb-4 mx-auto" style={{ color: "var(--rl-muted)", maxWidth: 560 }}>
+            A collection of anime I&apos;ve explored — filter by genre, tag
+            and format to find your next watch, from action to heartfelt drama
+            to classic isekai.
+          </p>
+          <a href="#list" className="btn btn-lg btn-hero">
+            Browse the list
+          </a>
+          {!loading && animeList.length > 0 && (
+            <p className="mt-3 mb-0 small" style={{ color: "var(--rl-muted)" }}>
+              {animeList.length} titles · {allFilters.length} genres & tags
+            </p>
+          )}
+        </div>
       </section>
 
       {/* Anime Section */}
-      <div className="container py-5 bg-dark text-white" id="list">
-        <h1 className="display-5 fw-bold mb-4 title">Ryou's AnimeList</h1>
+      <div
+        className="container py-5"
+        id="list"
+        style={{ background: "var(--rl-bg)", color: "var(--rl-text)" }}
+      >
+        <div className="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+          <div>
+            <h2 className="fw-bold mb-1 title" style={{ fontSize: "1.75rem" }}>
+              Ryou&apos;s AnimeList
+            </h2>
+            <p className="mb-0 small" style={{ color: "var(--rl-muted)" }}>
+              {loading
+                ? "Loading collection…"
+                : `${filtered.length} of ${animeList.length} showing`}
+              {selectedFilters.length > 0 &&
+                ` · ${selectedFilters.length} filter${selectedFilters.length > 1 ? "s" : ""} active`}
+            </p>
+          </div>
+          <span
+            className="badge font-badge"
+            style={{
+              background: "var(--rl-accent-soft)",
+              color: "var(--rl-accent)",
+              border: "1px solid rgba(181,154,95,.3)",
+            }}
+          >
+            {loading ? "…" : `${filtered.length} anime`}
+          </span>
+        </div>
 
         {/* Filters */}
-        <div className="row mb-5">
-          <div className="col-md-3 mb-3">
-            <label className="form-label fw-semibold">Type</label>
+        <div className="row mb-4 g-3">
+          <div className="col-md-3">
+            <label className="form-label fw-semibold small" style={{ color: "var(--rl-muted)" }}>
+              Format
+            </label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="form-select"
+              className="form-select dark-select"
             >
-              {["All", ...new Set(animeList.map((a) => a.format))].map((t) => (
-                <option key={t}>{t}</option>
+              {formats.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
 
           <div className="col-md-9">
-            <label className="form-label fw-semibold">Genres & Tags</label>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <label className="form-label fw-semibold small mb-0" style={{ color: "var(--rl-muted)" }}>
+                Genres & Tags
+              </label>
+              {selectedFilters.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedFilters([]);
+                    setType("All");
+                  }}
+                  className="btn btn-sm filter-clear"
+                  style={{
+                    background: "transparent",
+                    color: "var(--rl-muted)",
+                    border: "1px solid var(--rl-border)",
+                  }}
+                >
+                  Clear all ({selectedFilters.length})
+                </button>
+              )}
+            </div>
             <div className="d-flex flex-wrap gap-2">
               {allFilters.map((f) => {
                 const isActive = selectedFilters.includes(f);
@@ -128,88 +217,128 @@ function toggleFilter(filter) {
                   <button
                     key={f}
                     onClick={() => toggleFilter(f)}
-                    className={`btn btn-sm ${
-                      isActive ? "btn-primary" : "btn-outline-secondary"
-                    }`}
+                    aria-pressed={isActive}
+                    className={`btn btn-sm filter-pill ${isActive ? "active" : ""}`}
                   >
                     {f}
+                    <span className="ms-1 opacity-75">
+                      {filterCounts[f] ?? 0}
+                    </span>
                   </button>
                 );
               })}
-              {selectedFilters.length > 0 && (
-                <button
-                  onClick={() => setSelectedFilters([])}
-                  className="btn btn-sm btn-danger"
-                >
-                  Clear
-                </button>
+              {allFilters.length === 0 && !loading && (
+                <span className="small" style={{ color: "var(--rl-muted)" }}>
+                  No filters yet.
+                </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Counter */}
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h4 className="text-light font-heading">Anime List</h4>
-          <span className="badge bg-primary">
-            Showing {filtered.length} anime
-          </span>
-        </div>
+        {error && (
+          <div
+            className="p-4 mb-4"
+            style={{
+              background: "var(--rl-elev-1)",
+              border: "1px solid rgba(212,74,58,.35)",
+              borderRadius: 12,
+            }}
+          >
+            <p className="mb-1 fw-semibold">Couldn&apos;t load AniList.</p>
+            <p className="mb-0 small" style={{ color: "var(--rl-muted)" }}>
+              {error} — check your connection and reload.
+            </p>
+          </div>
+        )}
 
-        {/* Anime Grid */}
-        <div className="row g-3">
-          {filtered.map((anime) => (
-            <div key={anime.id} className="col-12 col-lg-6">
-              <a
-                href={anime.siteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-decoration-none text-dark"
-              >
-                <div className="d-flex border rounded shadow-sm h-100 anime-list bg-secondary">
-                  {/* Thumbnail */}
-                  <img
-                    src={anime.coverImage.large}
-                    alt={anime.title.romaji}
-                    className="img-fluid rounded-start"
-                    style={{
-                      width: "100px",
-                      height: "100%",
-                      objectFit: "cover",
-                      borderTopLeftRadius: "0.25rem",
-                      borderBottomLeftRadius: "0.25rem",
-                    }}
-                  />
-
-                  {/* Info */}
-                  <div className="flex-grow-1 p-2 text-white">
-                    <h6 className="mb-1 font-heading">
-                      {anime.title.english || anime.title.romaji}
-                    </h6>
-                    <p className="mb-1 font-score">⭐ {anime.averageScore ?? "N/A"}</p>
-                    <p className="mb-1 font-meta">{anime.episodes ?? "?"} eps</p>
-                    <div>
-                      <span className="badge me-1 bg-warning font-badge">
-                        {anime.format}
-                      </span>
-                      <span className="badge bg-primary font-badge">
-                        {anime.status}
-                      </span>
+        {/* Grid — loading / results / empty */}
+        {loading ? (
+          <div className="anime-grid" aria-label="Loading">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="skeleton-card">
+                <div className="skeleton-shimmer" style={{ height: 320 }} />
+                <div className="p-3">
+                  <div className="skeleton-shimmer rounded mb-2" style={{ height: 16, width: "80%" }} />
+                  <div className="skeleton-shimmer rounded" style={{ height: 12, width: "50%" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="anime-grid">
+            {filtered.map((anime) => (
+              <div key={anime.id} className="h-100">
+                <a
+                  href={anime.siteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-decoration-none"
+                  aria-label={anime.title.english || anime.title.romaji}
+                >
+                  <div className="d-flex h-100 anime-list">
+                    <img
+                      src={anime.coverImage.large}
+                      alt={anime.title.romaji}
+                      loading="lazy"
+                    />
+                    <div className="flex-grow-1 p-3 d-flex flex-column">
+                      <h6 className="mb-2 font-heading">
+                        {anime.title.english || anime.title.romaji}
+                      </h6>
+                      <p className="mb-1 font-score">
+                        ★ {anime.averageScore ?? "N/A"}
+                        <span className="font-meta ms-2">
+                          {anime.episodes ?? "?"} eps
+                        </span>
+                      </p>
+                      <div className="mt-auto pt-2 d-flex flex-wrap gap-1">
+                        {anime.format && (
+                          <span className="badge font-badge badge-accent">
+                            {anime.format}
+                          </span>
+                        )}
+                        {anime.status && (
+                          <span className="badge font-badge badge-muted-dark">
+                            {anime.status.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </a>
-            </div>
-          ))}
-        </div>
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* No results */}
-        {filtered.length === 0 && (
-          <p className="text-muted mt-5">No anime match your filters.</p>
+        {!loading && !error && filtered.length === 0 && (
+          <div
+            className="text-center p-5 mt-4"
+            style={{
+              background: "var(--rl-elev-1)",
+              border: "1px solid var(--rl-border)",
+              borderRadius: 12,
+            }}
+          >
+            <p className="fw-semibold mb-1" style={{ color: "var(--rl-text)" }}>
+              No anime match those filters
+            </p>
+            <p className="small mb-3" style={{ color: "var(--rl-muted)" }}>
+              Try removing a genre or resetting the format.
+            </p>
+            <button
+              onClick={() => {
+                setSelectedFilters([]);
+                setType("All");
+              }}
+              className="btn btn-sm btn-hero"
+            >
+              Reset filters
+            </button>
+          </div>
         )}
       </div>
     </>
   );
 }
-
-
