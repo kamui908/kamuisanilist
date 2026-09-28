@@ -1,8 +1,24 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import {
+  Sun,
+  Moon,
+  Star,
+  Clapperboard,
+  ChevronDown,
+  Sparkles,
+  ListFilter,
+  Search,
+  SearchX,
+  RotateCcw,
+  ArrowDownWideNarrow,
+} from "lucide-react";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { DotPattern } from "@/components/magicui/dot-pattern";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 30;
 
 export default function Home() {
   const [animeList, setAnimeList] = useState([]);
@@ -10,6 +26,73 @@ export default function Home() {
   const [type, setType] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [theme, setTheme] = useState("light");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const current =
+      document.documentElement.getAttribute("data-theme") || "light";
+    setTheme(current);
+  }, []);
+
+  // Global AniList search — independent of my list, debounced type-ahead
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) {
+      setResults([]);
+      setSearchOpen(false);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `
+              query ($search: String) {
+                Page(perPage: 8) {
+                  media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+                    id
+                    title { romaji english }
+                    coverImage { large }
+                    format
+                    seasonYear
+                    averageScore
+                  }
+                }
+              }
+            `,
+            variables: { search: q },
+          }),
+        });
+        const data = await res.json();
+        setResults(data.data?.Page?.media ?? []);
+        setSearchOpen(true);
+      } catch {
+        setResults([]);
+        setSearchOpen(true);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("rl-theme", next);
+    } catch {}
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -98,28 +181,74 @@ export default function Home() {
         ? prev.filter((f) => f !== filter)
         : [...prev, filter]
     );
+    setVisibleCount(PAGE_SIZE);
   }
+
+  function resetAll() {
+    setSelectedFilters([]);
+    setType("All");
+    setVisibleCount(PAGE_SIZE);
+  }
+
+  const visible = filtered.slice(0, visibleCount);
+  const auroraColors =
+    theme === "dark"
+      ? ["#e06a5a", "#f5f5f0", "#8a9a86", "#e06a5a"]
+      : ["#D44A3A", "#121212", "#8F8F8F", "#D44A3A"];
 
   return (
     <>
-      {/* Intro — Midnight Luxury, 82vh, single accent CTA */}
+      {/* Sticky topbar with theme switch */}
+      <header className="topbar">
+        <div className="container d-flex justify-content-between align-items-center py-2">
+          <Link href="/" className="text-decoration-none fw-bold title d-flex align-items-center gap-2" style={{ color: "var(--rl-text)" }}>
+            <Clapperboard size={18} style={{ color: "var(--rl-accent)" }} />
+            Kamui
+          </Link>
+          <button
+            onClick={toggleTheme}
+            className="theme-toggle d-flex align-items-center gap-2"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
+        </div>
+      </header>
+      {/* Intro — full first screen */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
-        style={{ minHeight: "82vh", background: "var(--rl-bg)" }}
+        style={{ minHeight: "calc(100svh - 53px)", background: "var(--rl-bg)" }}
       >
         <DotPattern
-          glow={true}
+          glow={false}
+          width={28}
+          height={28}
           className={cn(
-            "text-white/10 [mask-image:radial-gradient(700px_circle_at_center,white,transparent)]"
+            theme === "dark"
+              ? "text-white/[0.08] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
+              : "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
           )}
         />
-        <div className="position-relative px-3" style={{ maxWidth: 720 }}>
-          <h1 className="display-2 fw-bold mb-3 title" style={{ fontSize: "clamp(2.75rem, 7vw, 4.5rem)" }}>
-            <AuroraText colors={["#B59A5F", "#F5F5F0", "#8A9A86", "#B59A5F"]}>
-              Gura-io
+        <div className="position-relative px-3 d-flex flex-column align-items-center" style={{ maxWidth: 760 }}>
+          <span
+            className="font-eyebrow d-inline-flex align-items-center gap-2 px-3 py-1 mb-3"
+            style={{
+              background: "var(--rl-accent-soft)",
+              color: "var(--rl-accent)",
+              border: "1px solid var(--rl-border)",
+              borderRadius: 999,
+            }}
+          >
+            <Sparkles size={13} />
+            Kamui&apos;s collection
+          </span>
+          <h1 className="display-2 fw-bold mb-3 title" style={{ fontSize: "clamp(3rem, 9vw, 5.5rem)" }}>
+            <AuroraText colors={auroraColors} speed={0.5}>
+              Kamui
             </AuroraText>
           </h1>
-          <p className="lead mb-2" style={{ color: "var(--rl-text)" }}>
+          <p className="lead mb-2 font-alt" style={{ color: "var(--rl-text)" }}>
             <b>Welcome to My Anime List!</b>
           </p>
           <p className="mb-4 mx-auto" style={{ color: "var(--rl-muted)", maxWidth: 560 }}>
@@ -127,14 +256,18 @@ export default function Home() {
             and format to find your next watch, from action to heartfelt drama
             to classic isekai.
           </p>
-          <a href="#list" className="btn btn-lg btn-hero">
+          <a href="#list" className="btn btn-lg btn-hero d-inline-flex align-items-center gap-2">
+            <ArrowDownWideNarrow size={18} />
             Browse the list
           </a>
           {!loading && animeList.length > 0 && (
-            <p className="mt-3 mb-0 small" style={{ color: "var(--rl-muted)" }}>
+            <p className="mt-3 mb-0 small font-alt" style={{ color: "var(--rl-muted)" }}>
               {animeList.length} titles · {allFilters.length} genres & tags
             </p>
           )}
+          <a href="#list" className="scroll-cue mt-5 small text-decoration-none" aria-label="Scroll to list">
+            <ChevronDown size={18} />
+          </a>
         </div>
       </section>
 
@@ -146,8 +279,12 @@ export default function Home() {
       >
         <div className="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
           <div>
+            <p className="font-eyebrow mb-1 d-flex align-items-center gap-2" style={{ color: "var(--rl-accent)" }}>
+              <ListFilter size={13} />
+              The shelf
+            </p>
             <h2 className="fw-bold mb-1 title" style={{ fontSize: "1.75rem" }}>
-              Ryou&apos;s AnimeList
+              Kamui&apos;s AnimeList
             </h2>
             <p className="mb-0 small" style={{ color: "var(--rl-muted)" }}>
               {loading
@@ -162,22 +299,101 @@ export default function Home() {
             style={{
               background: "var(--rl-accent-soft)",
               color: "var(--rl-accent)",
-              border: "1px solid rgba(181,154,95,.3)",
+              border: "1px solid rgba(212,74,58,.3)",
             }}
           >
             {loading ? "…" : `${filtered.length} anime`}
           </span>
         </div>
 
+        {/* Global search — any anime on AniList */}
+        <div className="position-relative mb-4">
+          <div className="d-flex align-items-center gap-2 px-3" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}>
+            <Search size={16} style={{ color: "var(--rl-muted)", flexShrink: 0 }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => results.length > 0 && setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQuery("");
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="Search any anime… (min 3 letters)"
+              aria-label="Search any anime"
+              className="form-control border-0 bg-transparent py-2"
+              style={{ boxShadow: "none", color: "var(--rl-text)" }}
+            />
+            {searching && (
+              <span className="small" style={{ color: "var(--rl-muted)" }}>…</span>
+            )}
+          </div>
+          {searchOpen && query.trim().length >= 3 && !searching && (
+            <div
+              className="position-absolute w-100 mt-1"
+              style={{
+                zIndex: 60,
+                background: "var(--rl-elev-1)",
+                border: "1px solid var(--rl-border)",
+                borderRadius: 12,
+                overflow: "hidden",
+                boxShadow: "var(--rl-shadow)",
+                maxHeight: 360,
+                overflowY: "auto",
+              }}
+            >
+              {results.length === 0 ? (
+                <p className="small mb-0 px-3 py-3" style={{ color: "var(--rl-muted)" }}>
+                  No results for “{query.trim()}”.
+                </p>
+              ) : (
+                results.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/anime/${r.id}`}
+                    className="d-flex align-items-center gap-2 px-2 py-2 text-decoration-none"
+                    style={{ color: "var(--rl-text)" }}
+                  >
+                    <img
+                      src={r.coverImage?.large}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width="40"
+                      height="53"
+                      style={{ width: 40, height: 53, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
+                    />
+                    <span className="flex-grow-1" style={{ minWidth: 0 }}>
+                      <span className="d-block font-heading" style={{ fontSize: "0.8rem", minHeight: 0 }}>
+                        {r.title.english || r.title.romaji}
+                      </span>
+                      <span className="d-block font-meta">
+                        {[r.format?.replace(/_/g, " "), r.seasonYear].filter(Boolean).join(" · ")}
+                        {r.averageScore ? ` · ★ ${r.averageScore}` : ""}
+                      </span>
+                    </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="row mb-4 g-3">
           <div className="col-md-3">
-            <label className="form-label fw-semibold small" style={{ color: "var(--rl-muted)" }}>
+            <label className="form-label fw-semibold small d-flex align-items-center gap-1" style={{ color: "var(--rl-muted)" }}>
+              <Clapperboard size={13} />
               Format
             </label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => {
+                setType(e.target.value);
+                setVisibleCount(PAGE_SIZE);
+              }}
               className="form-select dark-select"
             >
               {formats.map((t) => (
@@ -190,22 +406,21 @@ export default function Home() {
 
           <div className="col-md-9">
             <div className="d-flex justify-content-between align-items-center mb-2">
-              <label className="form-label fw-semibold small mb-0" style={{ color: "var(--rl-muted)" }}>
+              <label className="form-label fw-semibold small mb-0 d-flex align-items-center gap-1" style={{ color: "var(--rl-muted)" }}>
+                <ListFilter size={13} />
                 Genres & Tags
               </label>
               {selectedFilters.length > 0 && (
                 <button
-                  onClick={() => {
-                    setSelectedFilters([]);
-                    setType("All");
-                  }}
-                  className="btn btn-sm filter-clear"
+                  onClick={resetAll}
+                  className="btn btn-sm filter-clear d-inline-flex align-items-center gap-1"
                   style={{
                     background: "transparent",
                     color: "var(--rl-muted)",
                     border: "1px solid var(--rl-border)",
                   }}
                 >
+                  <RotateCcw size={13} />
                   Clear all ({selectedFilters.length})
                 </button>
               )}
@@ -257,7 +472,7 @@ export default function Home() {
           <div className="anime-grid" aria-label="Loading">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="skeleton-card">
-                <div className="skeleton-shimmer" style={{ height: 320 }} />
+                <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
                 <div className="p-3">
                   <div className="skeleton-shimmer rounded mb-2" style={{ height: 16, width: "80%" }} />
                   <div className="skeleton-shimmer rounded" style={{ height: 12, width: "50%" }} />
@@ -266,61 +481,76 @@ export default function Home() {
             ))}
           </div>
         ) : (
-          <div className="anime-grid">
-            {filtered.map((anime) => (
-              <div key={anime.id} className="h-100">
-                <a
-                  href={anime.siteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-decoration-none"
-                  aria-label={anime.title.english || anime.title.romaji}
-                >
-                  <div className="d-flex h-100 anime-list">
-                    <img
-                      src={anime.coverImage.large}
-                      alt={anime.title.romaji}
-                      loading="lazy"
-                    />
-                    <div className="flex-grow-1 p-3 d-flex flex-column">
-                      <h6 className="mb-2 font-heading">
-                        {anime.title.english || anime.title.romaji}
-                      </h6>
-                      <p className="mb-1 font-score">
-                        ★ {anime.averageScore ?? "N/A"}
-                        <span className="font-meta ms-2">
-                          {anime.episodes ?? "?"} eps
-                        </span>
-                      </p>
-                      <div className="mt-auto pt-2 d-flex flex-wrap gap-1">
-                        {anime.format && (
-                          <span className="badge font-badge badge-accent">
-                            {anime.format}
+          <>
+            <div className="anime-grid">
+              {visible.map((anime, i) => (
+                <div key={anime.id} className="h-100">
+                  <Link
+                    href={`/anime/${anime.id}`}
+                    className="text-decoration-none"
+                    aria-label={anime.title.english || anime.title.romaji}
+                  >
+                    <div className="d-flex h-100 anime-list">
+                      <img
+                        src={anime.coverImage.large}
+                        alt={anime.title.romaji}
+                        loading={i < 6 ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchPriority={i < 6 ? "high" : "low"}
+                        sizes="(max-width: 768px) 33vw, (max-width: 1200px) 25vw, 16vw"
+                        width="460"
+                        height="613"
+                      />
+                      <div className="flex-grow-1 p-2 d-flex flex-column">
+                        <h6 className="mb-1 font-heading">
+                          {anime.title.english || anime.title.romaji}
+                        </h6>
+                        <p className="mb-1 font-score d-flex align-items-center gap-1">
+                          <Star size={13} style={{ color: "var(--rl-accent)" }} fill="currentColor" />
+                          {anime.averageScore ?? "N/A"}
+                          <span className="font-meta ms-1">
+                            {anime.episodes ?? "?"} eps
                           </span>
-                        )}
-                        {anime.status && (
-                          <span className="badge font-badge badge-muted-dark">
-                            {anime.status.replace(/_/g, " ")}
-                          </span>
-                        )}
+                        </p>
+                        <div className="mt-auto pt-1 d-flex flex-wrap gap-1">
+                          {anime.format && (
+                            <span className="badge font-badge badge-accent">
+                              {anime.format}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </a>
+                  </Link>
+                </div>
+              ))}
+            </div>
+            {visibleCount < filtered.length && (
+              <div className="text-center mt-4">
+                <p className="small mb-2" style={{ color: "var(--rl-muted)" }}>
+                  Showing {visible.length} of {filtered.length}
+                </p>
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="btn btn-hero"
+                >
+                  Show more
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {!loading && !error && filtered.length === 0 && (
           <div
-            className="text-center p-5 mt-4"
+            className="text-center p-5 mt-4 d-flex flex-column align-items-center"
             style={{
               background: "var(--rl-elev-1)",
               border: "1px solid var(--rl-border)",
               borderRadius: 12,
             }}
           >
+            <SearchX size={28} style={{ color: "var(--rl-muted)" }} className="mb-2" />
             <p className="fw-semibold mb-1" style={{ color: "var(--rl-text)" }}>
               No anime match those filters
             </p>
@@ -328,12 +558,10 @@ export default function Home() {
               Try removing a genre or resetting the format.
             </p>
             <button
-              onClick={() => {
-                setSelectedFilters([]);
-                setType("All");
-              }}
-              className="btn btn-sm btn-hero"
+              onClick={resetAll}
+              className="btn btn-sm btn-hero d-inline-flex align-items-center gap-2"
             >
+              <RotateCcw size={14} />
               Reset filters
             </button>
           </div>

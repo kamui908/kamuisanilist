@@ -1,16 +1,33 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Design-it Midnight Luxury tokens */
+/* Design-it Modern Editorial tokens (light, high-contrast, magazine) */
 :root {
+  color-scheme: light;
+  --rl-bg: #f9f9f9;
+  --rl-elev-1: #ffffff;
+  --rl-elev-2: #f1f1f1;
+  --rl-text: #121212;
+  --rl-muted: rgba(18, 18, 18, 0.6);
+  --rl-accent: #d44a3a;
+  --rl-accent-soft: rgba(212, 74, 58, 0.1);
+  --rl-border: rgba(18, 18, 18, 0.1);
+  --rl-img-bg: #e8e8e8;
+  --rl-shadow: 0 8px 24px rgba(18, 18, 18, 0.08);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
   --rl-bg: #0a0a0a;
   --rl-elev-1: #1c1c1c;
   --rl-elev-2: #242424;
   --rl-text: #f5f5f0;
   --rl-muted: rgba(245, 245, 240, 0.6);
-  --rl-accent: #b59a5f;
-  --rl-accent-soft: rgba(181, 154, 95, 0.14);
-  --rl-border: rgba(255, 255, 255, 0.07);
+  --rl-accent: #e06a5a;
+  --rl-accent-soft: rgba(224, 106, 90, 0.14);
+  --rl-border: rgba(255, 255, 255, 0.08);
+  --rl-img-bg: #242424;
+  --rl-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 /* Global styles */
@@ -39,11 +56,25 @@ button {
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dark theme anime cards — card-based-design + dark-mode: elevation via lightness */
+/* Dense responsive grid — small cards, more per row */
 .anime-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .anime-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .anime-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 18px;
+  }
 }
 
 .anime-list {
@@ -57,57 +88,128 @@ button {
 
 .anime-list:hover {
   transform: translateY(-4px);
-  background-color: var(--rl-elev-2) !important;
-  border-color: rgba(181, 154, 95, 0.35) !important;
+  background-color: var(--rl-elev-1) !important;
+  border-color: var(--rl-accent) !important;
+  box-shadow: var(--rl-shadow);
+}
+
+.anime-list {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 380px;
 }
 
 .anime-list img {
   width: 100% !important;
-  height: 320px !important;
+  height: auto !important;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 0 !important;
+  background: var(--rl-img-bg);
 }
 
-/* Headings — Sora display, Inter body */
+/* Compact card type */
+.anime-list .font-heading {
+  font-size: 0.85rem;
+  min-height: 2.4em;
+}
+.anime-list .font-score { font-size: 0.8rem; }
+.anime-list .font-meta { font-size: 0.75rem; }
+.anime-list .font-badge { font-size: 0.65rem; }
+
+/* Hero scroll cue */
+.scroll-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rl-muted);
+  animation: cue-bob 2s ease-in-out infinite;
+}
+@keyframes cue-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue { animation: none; }
+  .anime-list, .filter-pill { transition: none; }
+}
+
+/* Sticky topbar + theme toggle */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--rl-bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rl-border);
+}
+
+.theme-toggle {
+  border: 1px solid var(--rl-border) !important;
+  background: var(--rl-elev-1) !important;
+  color: var(--rl-text) !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600;
+}
+
+/* Headings — Sora display, Space Grotesk eyebrows/labels, Inter body */
 .font-heading {
   font-family: 'Sora', 'Inter', sans-serif;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--rl-text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-height: 2.4em;
 }
 
-/* Score text — desaturated gold */
+.font-eyebrow {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.font-alt {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+/* Score text — Space Grotesk numerals */
 .font-score {
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--rl-accent);
 }
 
 /* Meta info (episodes, etc.) */
 .font-meta {
-  font-size: 0.85rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.75rem;
   color: var(--rl-muted);
 }
 
-/* Badges — desaturated, no vibrating Bootstrap primaries */
+/* Badges — Space Grotesk labels */
 .font-badge {
-  font-size: 0.72rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.65rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 .badge-accent {
   background: var(--rl-accent-soft) !important;
   color: var(--rl-accent) !important;
-  border: 1px solid rgba(181, 154, 95, 0.3);
+  border: 1px solid rgba(212, 74, 58, 0.3);
 }
 
 .badge-muted-dark {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: rgba(18, 18, 18, 0.05) !important;
   color: var(--rl-muted) !important;
   border: 1px solid var(--rl-border);
 }
@@ -125,13 +227,13 @@ button {
 
 .filter-pill:hover {
   color: var(--rl-text) !important;
-  border-color: rgba(181, 154, 95, 0.5) !important;
+  border-color: rgba(212, 74, 58, 0.5) !important;
 }
 
 .filter-pill.active {
   background: var(--rl-accent-soft) !important;
   color: var(--rl-accent) !important;
-  border-color: rgba(181, 154, 95, 0.5) !important;
+  border-color: rgba(212, 74, 58, 0.5) !important;
 }
 
 .filter-clear {
@@ -151,13 +253,13 @@ button {
 .btn-hero {
   background: var(--rl-accent) !important;
   border: none !important;
-  color: #0a0a0a !important;
+  color: #fff !important;
   font-weight: 600 !important;
   border-radius: 10px !important;
   padding: 14px 36px !important;
 }
 
-/* Skeleton shimmer */
+/* Skeleton shimmer (light) */
 .skeleton-card {
   background: var(--rl-elev-1);
   border: 1px solid var(--rl-border);
@@ -166,7 +268,7 @@ button {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #1c1c1c 25%, #242424 50%, #1c1c1c 75%);
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
