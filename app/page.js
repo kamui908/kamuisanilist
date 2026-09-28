@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Sparkles,
   ListFilter,
+  Search,
   SearchX,
   RotateCcw,
   ArrowDownWideNarrow,
@@ -27,12 +28,62 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [theme, setTheme] = useState("light");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const current =
       document.documentElement.getAttribute("data-theme") || "light";
     setTheme(current);
   }, []);
+
+  // Global AniList search — independent of my list, debounced type-ahead
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) {
+      setResults([]);
+      setSearchOpen(false);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `
+              query ($search: String) {
+                Page(perPage: 8) {
+                  media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+                    id
+                    title { romaji english }
+                    coverImage { large }
+                    format
+                    seasonYear
+                    averageScore
+                  }
+                }
+              }
+            `,
+            variables: { search: q },
+          }),
+        });
+        const data = await res.json();
+        setResults(data.data?.Page?.media ?? []);
+        setSearchOpen(true);
+      } catch {
+        setResults([]);
+        setSearchOpen(true);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query]);
 
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -253,6 +304,81 @@ export default function Home() {
           >
             {loading ? "…" : `${filtered.length} anime`}
           </span>
+        </div>
+
+        {/* Global search — any anime on AniList */}
+        <div className="position-relative mb-4">
+          <div className="d-flex align-items-center gap-2 px-3" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}>
+            <Search size={16} style={{ color: "var(--rl-muted)", flexShrink: 0 }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => results.length > 0 && setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQuery("");
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="Search any anime… (min 3 letters)"
+              aria-label="Search any anime"
+              className="form-control border-0 bg-transparent py-2"
+              style={{ boxShadow: "none", color: "var(--rl-text)" }}
+            />
+            {searching && (
+              <span className="small" style={{ color: "var(--rl-muted)" }}>…</span>
+            )}
+          </div>
+          {searchOpen && query.trim().length >= 3 && !searching && (
+            <div
+              className="position-absolute w-100 mt-1"
+              style={{
+                zIndex: 60,
+                background: "var(--rl-elev-1)",
+                border: "1px solid var(--rl-border)",
+                borderRadius: 12,
+                overflow: "hidden",
+                boxShadow: "var(--rl-shadow)",
+                maxHeight: 360,
+                overflowY: "auto",
+              }}
+            >
+              {results.length === 0 ? (
+                <p className="small mb-0 px-3 py-3" style={{ color: "var(--rl-muted)" }}>
+                  No results for “{query.trim()}”.
+                </p>
+              ) : (
+                results.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/anime/${r.id}`}
+                    className="d-flex align-items-center gap-2 px-2 py-2 text-decoration-none"
+                    style={{ color: "var(--rl-text)" }}
+                  >
+                    <img
+                      src={r.coverImage?.large}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width="40"
+                      height="53"
+                      style={{ width: 40, height: 53, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
+                    />
+                    <span className="flex-grow-1" style={{ minWidth: 0 }}>
+                      <span className="d-block font-heading" style={{ fontSize: "0.8rem", minHeight: 0 }}>
+                        {r.title.english || r.title.romaji}
+                      </span>
+                      <span className="d-block font-meta">
+                        {[r.format?.replace(/_/g, " "), r.seasonYear].filter(Boolean).join(" · ")}
+                        {r.averageScore ? ` · ★ ${r.averageScore}` : ""}
+                      </span>
+                    </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         {/* Filters */}

@@ -175,7 +175,12 @@ export default function AnimeDetail() {
   const studios = anime.studios?.nodes?.map((s) => s.name).filter(Boolean) ?? [];
   const topTags = [...(anime.tags ?? [])].sort((a, b) => (a.rank ?? 100) - (b.rank ?? 100)).slice(0, 12);
   const desc = (anime.description ?? "No description available.").replace(/<br\s*\/?>/gi, "\n");
-  const relations = (anime.relations?.edges ?? []).filter((e) => e.node);
+  const relations = (anime.relations?.edges ?? []).filter(
+    (e) =>
+      e.node &&
+      e.relationType !== "ADAPTATION" &&
+      !["MANGA", "NOVEL", "ONE_SHOT"].includes(e.node.format)
+  );
   const grouped = relations.reduce((acc, e) => {
     const k = e.relationType?.replace(/_/g, " ") ?? "RELATED";
     (acc[k] = acc[k] || []).push(e.node);
@@ -187,7 +192,7 @@ export default function AnimeDetail() {
   return (
     <div style={{ background: "var(--rl-bg)", color: "var(--rl-text)", minHeight: "100vh" }}>
       {/* Backdrop hero — banner fades into page */}
-      <div className="position-relative" style={{ minHeight: "52svh", display: "flex", alignItems: "flex-end" }}>
+      <div className="position-relative" style={{ minHeight: "44svh", display: "flex", flexDirection: "column" }}>
         {anime.bannerImage ? (
           <img
             src={anime.bannerImage}
@@ -204,19 +209,19 @@ export default function AnimeDetail() {
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, transparent 35%, var(--rl-bg) 92%), linear-gradient(to top, var(--rl-bg) 0%, transparent 45%)",
+              "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 30%, var(--rl-bg) 94%), linear-gradient(to top, var(--rl-bg) 0%, transparent 40%)",
           }}
         />
-        <div className="container position-relative pb-2" style={{ paddingTop: 72 }}>
+        <div className="container position-relative" style={{ paddingTop: 16, zIndex: 3 }}>
           <Link href="/" className="btn btn-sm theme-toggle text-decoration-none d-inline-flex align-items-center gap-2">
             <ArrowLeft size={14} /> Back to list
           </Link>
         </div>
       </div>
 
-      {/* Details begin along the fade */}
-      <div className="container" style={{ marginTop: "-9rem" }}>
-        <div className="row g-4 align-items-end">
+      {/* Details begin along the fade — title kept clear of the poster */}
+      <div className="container" style={{ marginTop: "-7rem", position: "relative", zIndex: 2 }}>
+        <div className="row g-3 g-md-4">
           <div className="col-5 col-md-3 col-lg-2">
             <img
               src={anime.coverImage.extraLarge || anime.coverImage.large}
@@ -232,12 +237,10 @@ export default function AnimeDetail() {
                 borderRadius: 14,
                 border: "1px solid var(--rl-border)",
                 boxShadow: "var(--rl-shadow)",
-                position: "relative",
-                zIndex: 2,
               }}
             />
           </div>
-          <div className="col-7 col-md-9 col-lg-10 pb-1">
+          <div className="col-7 col-md-9 col-lg-10" style={{ paddingTop: "7.5rem" }}>
             <p className="font-eyebrow mb-1 d-flex align-items-center gap-2" style={{ color: "var(--rl-accent)" }}>
               <Tv size={13} />
               {anime.format?.replace(/_/g, " ") ?? "Anime"}
@@ -410,6 +413,7 @@ export default function AnimeDetail() {
           </div>
         )}
       </div>
+      <div style={{ height: 72 }} />
     </div>
   );
 }
