@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Flame, Search, SearchX, Star } from "lucide-react";
+import { ArrowLeft, ChevronRight, Flame, LayoutGrid, List, Search, SearchX, Star } from "lucide-react";
 
 const SEARCH_QUERY = `
   query ($search: String) {
@@ -44,6 +44,41 @@ async function runQuery(query, variables) {
   if (!res.ok) throw new Error(`AniList responded ${res.status}`);
   const data = await res.json();
   return data.data?.Page?.media ?? [];
+}
+
+function ResultRow({ anime }) {
+  const title = anime.title.english || anime.title.romaji;
+  return (
+    <Link
+      href={`/anime/${anime.id}`}
+      onClick={() => {
+        try {
+          sessionStorage.setItem("kamui-back-target", "/search");
+        } catch {}
+      }}
+      className="text-decoration-none anime-row"
+      style={{ color: "var(--rl-text)" }}
+      aria-label={title}
+    >
+      <img
+        src={anime.coverImage?.large}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        width="88"
+        height="120"
+      />
+      <span className="flex-grow-1" style={{ minWidth: 0 }}>
+        <span className="d-block font-heading" style={{ minHeight: 0 }}>{title}</span>
+        <span className="d-block font-meta mt-1">
+          {[anime.format?.replace(/_/g, " "), anime.seasonYear].filter(Boolean).join(" · ")}
+          {anime.averageScore ? ` · ★ ${anime.averageScore}` : ""}
+          {anime.episodes ? ` · ${anime.episodes} eps` : ""}
+        </span>
+      </span>
+      <ChevronRight size={16} style={{ color: "var(--rl-muted)", flexShrink: 0 }} />
+    </Link>
+  );
 }
 
 function ResultCard({ anime, eager }) {
@@ -98,6 +133,21 @@ export default function SearchPage() {
   const [trending, setTrending] = useState([]);
   const [searching, setSearching] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
+  const [view, setView] = useState(() => {
+    if (typeof window === "undefined") return "grid";
+    try {
+      return sessionStorage.getItem("kamui-search-view") ?? "grid";
+    } catch {
+      return "grid";
+    }
+  });
+
+  function changeView(next) {
+    setView(next);
+    try {
+      sessionStorage.setItem("kamui-search-view", next);
+    } catch {}
+  }
 
   useEffect(() => {
     runQuery(TRENDING_QUERY, {})
@@ -164,23 +214,80 @@ export default function SearchPage() {
         </p>
 
         {!isSearching && (
-          <p className="font-eyebrow mb-2 d-flex align-items-center gap-2" style={{ color: "var(--rl-muted)" }}>
-            <Flame size={13} /> Trending
-          </p>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <p className="font-eyebrow mb-0 d-flex align-items-center gap-2" style={{ color: "var(--rl-muted)" }}>
+              <Flame size={13} /> Trending
+            </p>
+            <div className="view-switch" role="group" aria-label="Switch layout">
+              <button
+                onClick={() => changeView("grid")}
+                className={view === "grid" ? "active" : ""}
+                aria-label="Grid view"
+                aria-pressed={view === "grid"}
+              >
+                <LayoutGrid size={15} />
+              </button>
+              <button
+                onClick={() => changeView("list")}
+                className={view === "list" ? "active" : ""}
+                aria-label="List view"
+                aria-pressed={view === "list"}
+              >
+                <List size={15} />
+              </button>
+            </div>
+          </div>
         )}
 
-        {isSearching && searching ? (
-          <div className="anime-grid" aria-label="Searching">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="skeleton-card">
-                <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
-                <div className="p-2">
-                  <div className="skeleton-shimmer rounded mb-2" style={{ height: 14, width: "80%" }} />
-                  <div className="skeleton-shimmer rounded" style={{ height: 11, width: "50%" }} />
-                </div>
-              </div>
-            ))}
+        {isSearching && (
+          <div className="d-flex justify-content-end mb-2">
+            <div className="view-switch" role="group" aria-label="Switch layout">
+              <button
+                onClick={() => changeView("grid")}
+                className={view === "grid" ? "active" : ""}
+                aria-label="Grid view"
+                aria-pressed={view === "grid"}
+              >
+                <LayoutGrid size={15} />
+              </button>
+              <button
+                onClick={() => changeView("list")}
+                className={view === "list" ? "active" : ""}
+                aria-label="List view"
+                aria-pressed={view === "list"}
+              >
+                <List size={15} />
+              </button>
+            </div>
           </div>
+        )}
+
+        {(isSearching && searching) || (!isSearching && loadingTrending) ? (
+          view === "grid" ? (
+            <div className="anime-grid" aria-label="Searching">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="skeleton-card">
+                  <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
+                  <div className="p-2">
+                    <div className="skeleton-shimmer rounded mb-2" style={{ height: 14, width: "80%" }} />
+                    <div className="skeleton-shimmer rounded" style={{ height: 11, width: "50%" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="anime-rows" aria-label="Searching">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="d-flex align-items-center gap-3 p-2" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 10 }}>
+                  <div className="skeleton-shimmer rounded" style={{ width: 44, height: 60, flexShrink: 0 }} />
+                  <div className="flex-grow-1">
+                    <div className="skeleton-shimmer rounded mb-2" style={{ height: 14, width: "60%" }} />
+                    <div className="skeleton-shimmer rounded" style={{ height: 11, width: "35%" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : shown.length === 0 ? (
           <div className="text-center p-5 d-flex flex-column align-items-center" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}>
             <SearchX size={28} style={{ color: "var(--rl-muted)" }} className="mb-2" />
@@ -192,11 +299,19 @@ export default function SearchPage() {
             </p>
           </div>
         ) : (
-          <div className="anime-grid">
-            {shown.map((a, i) => (
-              <ResultCard key={a.id} anime={a} eager={i < 6} />
-            ))}
-          </div>
+          view === "grid" ? (
+            <div className="anime-grid">
+              {shown.map((a, i) => (
+                <ResultCard key={a.id} anime={a} eager={i < 6} />
+              ))}
+            </div>
+          ) : (
+            <div className="anime-rows">
+              {shown.map((a) => (
+                <ResultRow key={a.id} anime={a} />
+              ))}
+            </div>
+          )
         )}
       </div>
       <div style={{ height: 48 }} />

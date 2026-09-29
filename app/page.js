@@ -5,8 +5,11 @@ import {
   Star,
   Clapperboard,
   ChevronDown,
+  ChevronRight,
   Sparkles,
   ListFilter,
+  LayoutGrid,
+  List,
   Search,
   SearchX,
   RotateCcw,
@@ -60,6 +63,7 @@ export default function Home() {
   );
   const [type, setType] = useState(() => readStoredState().type ?? "All");
   const [sort, setSort] = useState(() => readStoredState().sort ?? "recent");
+  const [view, setView] = useState(() => readStoredState().view ?? "grid");
   const [visibleCount, setVisibleCount] = useState(
     () => readStoredState().visibleCount ?? PAGE_SIZE
   );
@@ -189,10 +193,10 @@ export default function Home() {
     try {
       sessionStorage.setItem(
         STATE_KEY,
-        JSON.stringify({ selectedFilters, type, sort, visibleCount })
+        JSON.stringify({ selectedFilters, type, sort, view, visibleCount })
       );
     } catch {}
-  }, [selectedFilters, type, sort, visibleCount]);
+  }, [selectedFilters, type, sort, view, visibleCount]);
 
   useEffect(() => {
     window.addEventListener("pagehide", saveScroll);
@@ -370,6 +374,24 @@ export default function Home() {
             </p>
           </div>
           <div className="d-flex align-items-center gap-2">
+            <div className="view-switch" role="group" aria-label="Switch layout">
+              <button
+                onClick={() => setView("grid")}
+                className={view === "grid" ? "active" : ""}
+                aria-label="Grid view"
+                aria-pressed={view === "grid"}
+              >
+                <LayoutGrid size={15} />
+              </button>
+              <button
+                onClick={() => setView("list")}
+                className={view === "list" ? "active" : ""}
+                aria-label="List view"
+                aria-pressed={view === "list"}
+              >
+                <List size={15} />
+              </button>
+            </div>
             <select
               value={sort}
               onChange={(e) => {
@@ -562,20 +584,34 @@ export default function Home() {
           </div>
         )}
 
-        {/* Grid — loading / results / empty */}
+        {/* Grid / list — loading / results / empty */}
         {loading ? (
-          <div className="anime-grid" aria-label="Loading">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="skeleton-card">
-                <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
-                <div className="p-3">
-                  <div className="skeleton-shimmer rounded mb-2" style={{ height: 16, width: "80%" }} />
-                  <div className="skeleton-shimmer rounded" style={{ height: 12, width: "50%" }} />
+          view === "grid" ? (
+            <div className="anime-grid" aria-label="Loading">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="skeleton-card">
+                  <div className="skeleton-shimmer" style={{ aspectRatio: "3 / 4" }} />
+                  <div className="p-3">
+                    <div className="skeleton-shimmer rounded mb-2" style={{ height: 16, width: "80%" }} />
+                    <div className="skeleton-shimmer rounded" style={{ height: 12, width: "50%" }} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
+              ))}
+            </div>
+          ) : (
+            <div className="anime-rows" aria-label="Loading">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="d-flex align-items-center gap-3 p-2" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 10 }}>
+                  <div className="skeleton-shimmer rounded" style={{ width: 44, height: 60, flexShrink: 0 }} />
+                  <div className="flex-grow-1">
+                    <div className="skeleton-shimmer rounded mb-2" style={{ height: 14, width: "60%" }} />
+                    <div className="skeleton-shimmer rounded" style={{ height: 11, width: "35%" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : view === "grid" ? (
           <>
             <div className="anime-grid">
               {visible.map((anime, i) => (
@@ -620,6 +656,56 @@ export default function Home() {
                   </Link>
                 </div>
               ))}
+            </div>
+            {visibleCount < filtered.length && (
+              <div className="text-center mt-4">
+                <p className="small mb-2" style={{ color: "var(--rl-muted)" }}>
+                  Showing {visible.length} of {filtered.length}
+                </p>
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="btn btn-hero"
+                >
+                  Show more
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="anime-rows">
+              {visible.map((anime, i) => {
+                const title = anime.title.english || anime.title.romaji;
+                return (
+                  <Link
+                    key={anime.id}
+                    href={`/anime/${anime.id}`}
+                    onClick={() => markBackTarget("/")}
+                    className="text-decoration-none anime-row"
+                    style={{ color: "var(--rl-text)" }}
+                    aria-label={title}
+                  >
+                    <img
+                      src={anime.coverImage.large}
+                      alt=""
+                      loading={i < 10 ? "eager" : "lazy"}
+                      decoding="async"
+                      width="88"
+                      height="120"
+                    />
+                    <span className="flex-grow-1" style={{ minWidth: 0 }}>
+                      <span className="d-block font-heading" style={{ minHeight: 0 }}>{title}</span>
+                      <span className="d-block font-meta mt-1">
+                        {anime.format?.replace(/_/g, " ") ?? "—"}
+                        {" · "}
+                        {anime.episodes ?? "?"} eps
+                        {anime.averageScore ? ` · ★ ${anime.averageScore}` : ""}
+                      </span>
+                    </span>
+                    <ChevronRight size={16} style={{ color: "var(--rl-muted)", flexShrink: 0 }} />
+                  </Link>
+                );
+              })}
             </div>
             {visibleCount < filtered.length && (
               <div className="text-center mt-4">
