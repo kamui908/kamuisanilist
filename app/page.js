@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   Sun,
@@ -19,14 +19,46 @@ import { DotPattern } from "@/components/magicui/dot-pattern";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
+const STATE_KEY = "kamui-list-state";
+const LIST_KEY = "kamui-anime-list";
+const SCROLL_KEY = "kamui-scroll";
+
+function readStoredState() {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(sessionStorage.getItem(STATE_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function getCachedList() {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(sessionStorage.getItem(LIST_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveScroll() {
+  try {
+    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+  } catch {}
+}
 
 export default function Home() {
-  const [animeList, setAnimeList] = useState([]);
-  const [selectedFilters, setSelectedFilters] = useState([]);
-  const [type, setType] = useState("All");
-  const [loading, setLoading] = useState(true);
+  const [animeList, setAnimeList] = useState(getCachedList);
+  const [selectedFilters, setSelectedFilters] = useState(
+    () => readStoredState().selectedFilters ?? []
+  );
+  const [type, setType] = useState(() => readStoredState().type ?? "All");
+  const [visibleCount, setVisibleCount] = useState(
+    () => readStoredState().visibleCount ?? PAGE_SIZE
+  );
+  const [loading, setLoading] = useState(() => getCachedList().length === 0);
   const [error, setError] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [theme, setTheme] = useState("light");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -120,7 +152,7 @@ export default function Home() {
       `;
 
       try {
-        setLoading(true);
+        if (getCachedList().length === 0) setLoading(true);
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -130,9 +162,15 @@ export default function Home() {
         const data = await res.json();
         const entries =
           data.data?.MediaListCollection?.lists?.flatMap((l) => l.entries) ?? [];
-        setAnimeList(entries.map((e) => e.media).filter(Boolean));
+        const list = entries.map((e) => e.media).filter(Boolean);
+        setAnimeList(list);
+        try {
+          sessionStorage.setItem(LIST_KEY, JSON.stringify(list));
+        } catch {}
       } catch (e) {
-        setError(e.message || "Failed to load list");
+        if (getCachedList().length === 0) {
+          setError(e.message || "Failed to load list");
+        }
       } finally {
         setLoading(false);
       }
@@ -140,6 +178,37 @@ export default function Home() {
 
     fetchData();
   }, []);
+
+  // Persist filters + position so detail pages restore the exact screen
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        STATE_KEY,
+        JSON.stringify({ selectedFilters, type, visibleCount })
+      );
+    } catch {}
+  }, [selectedFilters, type, visibleCount]);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", saveScroll);
+    return () => window.removeEventListener("pagehide", saveScroll);
+  }, []);
+
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    if (loading || scrollRestored.current) return;
+    scrollRestored.current = true;
+    let y = 0;
+    try {
+      y = Number(sessionStorage.getItem(SCROLL_KEY)) || 0;
+    } catch {}
+    if (y > 0) {
+      requestAnimationFrame(() => window.scrollTo(0, y));
+      setTimeout(() => {
+        if (window.scrollY < y - 200) window.scrollTo(0, y);
+      }, 400);
+    }
+  }, [loading]);
 
   const { allFilters, filterCounts, formats } = useMemo(() => {
     const genres = [...new Set(animeList.flatMap((a) => a.genres ?? []))].sort();
@@ -221,7 +290,7 @@ export default function Home() {
         style={{ minHeight: "calc(100svh - 53px)", background: "var(--rl-bg)" }}
       >
         <DotPattern
-          glow={false}
+          glow={true}
           width={28}
           height={28}
           className={cn(
@@ -353,6 +422,10 @@ export default function Home() {
                   <Link
                     key={r.id}
                     href={`/anime/${r.id}`}
+                    onClick={() => {
+                      saveScroll();
+                      setSearchOpen(false);
+                    }}
                     className="d-flex align-items-center gap-2 px-2 py-2 text-decoration-none"
                     style={{ color: "var(--rl-text)" }}
                   >
@@ -487,6 +560,7 @@ export default function Home() {
                 <div key={anime.id} className="h-100">
                   <Link
                     href={`/anime/${anime.id}`}
+                    onClick={saveScroll}
                     className="text-decoration-none"
                     aria-label={anime.title.english || anime.title.romaji}
                   >
