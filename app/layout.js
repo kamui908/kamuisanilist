@@ -1,5 +1,7 @@
 import "@/styles/bootstrap.min.css"; // local bootstrap
 import "@/styles/globals.css";
+import Topbar from "@/components/Topbar";
+import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Kamui's AniList",
@@ -19,11 +21,15 @@ export default function RootLayout({ children }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("rl-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
+            __html: `(function(){try{var t=localStorage.getItem("rl-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t);if(t==="dark")document.documentElement.classList.add("dark")}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
           }}
         />
       </head>
-      <body style={{ background: "var(--rl-bg)" }}>{children}</body>
+      <body style={{ background: "var(--rl-bg)" }}>
+        <Topbar />
+        {children}
+        <Footer />
+      </body>
     </html>
   );
 }

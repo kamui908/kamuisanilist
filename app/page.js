@@ -2,8 +2,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
-  Sun,
-  Moon,
   Star,
   Clapperboard,
   ChevronDown,
@@ -15,8 +13,7 @@ import {
   ArrowDownWideNarrow,
 } from "lucide-react";
 import { AuroraText } from "@/components/magicui/aurora-text";
-import { DotPattern } from "@/components/magicui/dot-pattern";
-import { cn } from "@/lib/utils";
+import { HexagonBackground } from "@/components/animate-ui/components/backgrounds/hexagon";
 
 const PAGE_SIZE = 30;
 const STATE_KEY = "kamui-list-state";
@@ -69,6 +66,9 @@ export default function Home() {
     const current =
       document.documentElement.getAttribute("data-theme") || "light";
     setTheme(current);
+    const onTheme = (e) => setTheme(e.detail || "light");
+    window.addEventListener("rl-theme", onTheme);
+    return () => window.removeEventListener("rl-theme", onTheme);
   }, []);
 
   // Global AniList search — independent of my list, debounced type-ahead
@@ -116,15 +116,6 @@ export default function Home() {
     }, 400);
     return () => clearTimeout(t);
   }, [query]);
-
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("rl-theme", next);
-    } catch {}
-  }
 
   useEffect(() => {
     async function fetchData() {
@@ -267,39 +258,17 @@ export default function Home() {
 
   return (
     <>
-      {/* Sticky topbar with theme switch */}
-      <header className="topbar">
-        <div className="container d-flex justify-content-between align-items-center py-2">
-          <Link href="/" className="text-decoration-none fw-bold title d-flex align-items-center gap-2" style={{ color: "var(--rl-text)" }}>
-            <Clapperboard size={18} style={{ color: "var(--rl-accent)" }} />
-            Kamui
-          </Link>
-          <button
-            onClick={toggleTheme}
-            className="theme-toggle d-flex align-items-center gap-2"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-            {theme === "dark" ? "Light" : "Dark"}
-          </button>
-        </div>
-      </header>
-      {/* Intro — full first screen */}
+      {/* Intro — full first screen over hexagon grid (hover to light cells) */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
         style={{ minHeight: "calc(100svh - 53px)", background: "var(--rl-bg)" }}
       >
-        <DotPattern
-          glow={true}
-          width={28}
-          height={28}
-          className={cn(
-            theme === "dark"
-              ? "text-white/[0.08] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
-              : "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
-          )}
+        <HexagonBackground
+          hexagonSize={88}
+          hexagonMargin={4}
+          className="absolute inset-0 bg-transparent dark:bg-transparent [mask-image:radial-gradient(800px_circle_at_center,white,transparent)]"
         />
-        <div className="position-relative px-3 d-flex flex-column align-items-center" style={{ maxWidth: 760 }}>
+        <div className="px-3 d-flex flex-column align-items-center pe-none" style={{ maxWidth: 760, zIndex: 1, pointerEvents: "none" }}>
           <span
             className="font-eyebrow d-inline-flex align-items-center gap-2 px-3 py-1 mb-3"
             style={{
@@ -325,7 +294,7 @@ export default function Home() {
             and format to find your next watch, from action to heartfelt drama
             to classic isekai.
           </p>
-          <a href="#list" className="btn btn-lg btn-hero d-inline-flex align-items-center gap-2">
+          <a href="#list" className="btn btn-lg btn-hero d-inline-flex align-items-center gap-2" style={{ pointerEvents: "auto" }}>
             <ArrowDownWideNarrow size={18} />
             Browse the list
           </a>
@@ -334,7 +303,7 @@ export default function Home() {
               {animeList.length} titles · {allFilters.length} genres & tags
             </p>
           )}
-          <a href="#list" className="scroll-cue mt-5 small text-decoration-none" aria-label="Scroll to list">
+          <a href="#list" className="scroll-cue mt-5 small text-decoration-none" aria-label="Scroll to list" style={{ pointerEvents: "auto" }}>
             <ChevronDown size={18} />
           </a>
         </div>
