@@ -1,9 +1,7 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
-  Sun,
-  Moon,
   Star,
   Clapperboard,
   ChevronDown,
@@ -15,18 +13,58 @@ import {
   ArrowDownWideNarrow,
 } from "lucide-react";
 import { AuroraText } from "@/components/magicui/aurora-text";
-import { DotPattern } from "@/components/magicui/dot-pattern";
-import { cn } from "@/lib/utils";
+import { GravityStarsBackground } from "@/components/animate-ui/components/backgrounds/gravity-stars";
 
 const PAGE_SIZE = 30;
+const STATE_KEY = "kamui-list-state";
+const LIST_KEY = "kamui-anime-list";
+const SCROLL_KEY = "kamui-scroll";
+const BACK_KEY = "kamui-back-target";
+
+function readStoredState() {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(sessionStorage.getItem(STATE_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function getCachedList() {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(sessionStorage.getItem(LIST_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveScroll() {
+  try {
+    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+  } catch {}
+}
+
+function markBackTarget(target) {
+  saveScroll();
+  try {
+    sessionStorage.setItem(BACK_KEY, target);
+  } catch {}
+}
 
 export default function Home() {
-  const [animeList, setAnimeList] = useState([]);
-  const [selectedFilters, setSelectedFilters] = useState([]);
-  const [type, setType] = useState("All");
-  const [loading, setLoading] = useState(true);
+  const [animeList, setAnimeList] = useState(getCachedList);
+  const [selectedFilters, setSelectedFilters] = useState(
+    () => readStoredState().selectedFilters ?? []
+  );
+  const [type, setType] = useState(() => readStoredState().type ?? "All");
+  const [sort, setSort] = useState(() => readStoredState().sort ?? "recent");
+  const [visibleCount, setVisibleCount] = useState(
+    () => readStoredState().visibleCount ?? PAGE_SIZE
+  );
+  const [loading, setLoading] = useState(() => getCachedList().length === 0);
   const [error, setError] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [theme, setTheme] = useState("light");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -37,6 +75,9 @@ export default function Home() {
     const current =
       document.documentElement.getAttribute("data-theme") || "light";
     setTheme(current);
+    const onTheme = (e) => setTheme(e.detail || "light");
+    window.addEventListener("rl-theme", onTheme);
+    return () => window.removeEventListener("rl-theme", onTheme);
   }, []);
 
   // Global AniList search — independent of my list, debounced type-ahead
@@ -85,15 +126,6 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [query]);
 
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("rl-theme", next);
-    } catch {}
-  }
-
   useEffect(() => {
     async function fetchData() {
       const query = `
@@ -101,6 +133,7 @@ export default function Home() {
           MediaListCollection(userName: $username, type: ANIME) {
             lists {
               entries {
+                updatedAt
                 media {
                   id
                   title { romaji english }
@@ -120,7 +153,7 @@ export default function Home() {
       `;
 
       try {
-        setLoading(true);
+        if (getCachedList().length === 0) setLoading(true);
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -130,9 +163,19 @@ export default function Home() {
         const data = await res.json();
         const entries =
           data.data?.MediaListCollection?.lists?.flatMap((l) => l.entries) ?? [];
-        setAnimeList(entries.map((e) => e.media).filter(Boolean));
+        const list = entries
+          .map((e) =>
+            e.media ? { ...e.media, _updatedAt: e.updatedAt ?? 0 } : null
+          )
+          .filter(Boolean);
+        setAnimeList(list);
+        try {
+          sessionStorage.setItem(LIST_KEY, JSON.stringify(list));
+        } catch {}
       } catch (e) {
-        setError(e.message || "Failed to load list");
+        if (getCachedList().length === 0) {
+          setError(e.message || "Failed to load list");
+        }
       } finally {
         setLoading(false);
       }
@@ -140,6 +183,37 @@ export default function Home() {
 
     fetchData();
   }, []);
+
+  // Persist filters + position so detail pages restore the exact screen
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        STATE_KEY,
+        JSON.stringify({ selectedFilters, type, sort, visibleCount })
+      );
+    } catch {}
+  }, [selectedFilters, type, sort, visibleCount]);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", saveScroll);
+    return () => window.removeEventListener("pagehide", saveScroll);
+  }, []);
+
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    if (loading || scrollRestored.current) return;
+    scrollRestored.current = true;
+    let y = 0;
+    try {
+      y = Number(sessionStorage.getItem(SCROLL_KEY)) || 0;
+    } catch {}
+    if (y > 0) {
+      requestAnimationFrame(() => window.scrollTo(0, y));
+      setTimeout(() => {
+        if (window.scrollY < y - 200) window.scrollTo(0, y);
+      }, 400);
+    }
+  }, [loading]);
 
   const { allFilters, filterCounts, formats } = useMemo(() => {
     const genres = [...new Set(animeList.flatMap((a) => a.genres ?? []))].sort();
@@ -160,7 +234,7 @@ export default function Home() {
   }, [animeList]);
 
   const filtered = useMemo(() => {
-    return animeList.filter((anime) => {
+    const out = animeList.filter((anime) => {
       const matchesFilters =
         selectedFilters.length === 0 ||
         selectedFilters.every(
@@ -173,7 +247,16 @@ export default function Home() {
       const matchesType = type === "All" || anime.format === type;
       return matchesFilters && matchesType;
     });
-  }, [animeList, selectedFilters, type]);
+    const titleOf = (a) => a.title.english || a.title.romaji || "";
+    if (sort === "score") {
+      out.sort((a, b) => (b.averageScore ?? -1) - (a.averageScore ?? -1));
+    } else if (sort === "az") {
+      out.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
+    } else {
+      out.sort((a, b) => (b._updatedAt ?? 0) - (a._updatedAt ?? 0));
+    }
+    return out;
+  }, [animeList, selectedFilters, type, sort]);
 
   function toggleFilter(filter) {
     setSelectedFilters((prev) =>
@@ -198,39 +281,31 @@ export default function Home() {
 
   return (
     <>
-      {/* Sticky topbar with theme switch */}
-      <header className="topbar">
-        <div className="container d-flex justify-content-between align-items-center py-2">
-          <Link href="/" className="text-decoration-none fw-bold title d-flex align-items-center gap-2" style={{ color: "var(--rl-text)" }}>
-            <Clapperboard size={18} style={{ color: "var(--rl-accent)" }} />
-            Kamui
-          </Link>
-          <button
-            onClick={toggleTheme}
-            className="theme-toggle d-flex align-items-center gap-2"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-            {theme === "dark" ? "Light" : "Dark"}
-          </button>
-        </div>
-      </header>
-      {/* Intro — full first screen */}
+      {/* Intro — full first screen over gravity stars, fading into the list */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
         style={{ minHeight: "calc(100svh - 53px)", background: "var(--rl-bg)" }}
       >
-        <DotPattern
-          glow={false}
-          width={28}
-          height={28}
-          className={cn(
-            theme === "dark"
-              ? "text-white/[0.08] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
-              : "text-black/[0.07] [mask-image:radial-gradient(600px_circle_at_center,white,transparent)]"
-          )}
+        <GravityStarsBackground
+          starsCount={90}
+          starsOpacity={0.55}
+          movementSpeed={0.25}
+          className="absolute inset-0"
+          style={{ color: "var(--rl-accent)" }}
         />
-        <div className="position-relative px-3 d-flex flex-column align-items-center" style={{ maxWidth: 760 }}>
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 140,
+            background: "linear-gradient(to bottom, transparent, var(--rl-bg))",
+            pointerEvents: "none",
+          }}
+        />
+        <div className="px-3 d-flex flex-column align-items-center pe-none" style={{ maxWidth: 760, zIndex: 1, pointerEvents: "none" }}>
           <span
             className="font-eyebrow d-inline-flex align-items-center gap-2 px-3 py-1 mb-3"
             style={{
@@ -256,7 +331,7 @@ export default function Home() {
             and format to find your next watch, from action to heartfelt drama
             to classic isekai.
           </p>
-          <a href="#list" className="btn btn-lg btn-hero d-inline-flex align-items-center gap-2">
+          <a href="#list" className="btn btn-lg btn-hero d-inline-flex align-items-center gap-2" style={{ pointerEvents: "auto" }}>
             <ArrowDownWideNarrow size={18} />
             Browse the list
           </a>
@@ -265,7 +340,7 @@ export default function Home() {
               {animeList.length} titles · {allFilters.length} genres & tags
             </p>
           )}
-          <a href="#list" className="scroll-cue mt-5 small text-decoration-none" aria-label="Scroll to list">
+          <a href="#list" className="scroll-cue mt-5 small text-decoration-none" aria-label="Scroll to list" style={{ pointerEvents: "auto" }}>
             <ChevronDown size={18} />
           </a>
         </div>
@@ -294,16 +369,32 @@ export default function Home() {
                 ` · ${selectedFilters.length} filter${selectedFilters.length > 1 ? "s" : ""} active`}
             </p>
           </div>
-          <span
-            className="badge font-badge"
-            style={{
-              background: "var(--rl-accent-soft)",
-              color: "var(--rl-accent)",
-              border: "1px solid rgba(212,74,58,.3)",
-            }}
-          >
-            {loading ? "…" : `${filtered.length} anime`}
-          </span>
+          <div className="d-flex align-items-center gap-2">
+            <select
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setVisibleCount(PAGE_SIZE);
+              }}
+              aria-label="Sort anime list"
+              className="form-select form-select-sm dark-select"
+              style={{ width: "auto" }}
+            >
+              <option value="recent">Recently updated</option>
+              <option value="score">Top rated</option>
+              <option value="az">Title A–Z</option>
+            </select>
+            <span
+              className="badge font-badge"
+              style={{
+                background: "var(--rl-accent-soft)",
+                color: "var(--rl-accent)",
+                border: "1px solid rgba(212,74,58,.3)",
+              }}
+            >
+              {loading ? "…" : `${filtered.length} anime`}
+            </span>
+          </div>
         </div>
 
         {/* Global search — any anime on AniList */}
@@ -353,6 +444,10 @@ export default function Home() {
                   <Link
                     key={r.id}
                     href={`/anime/${r.id}`}
+                    onClick={() => {
+                      markBackTarget("/");
+                      setSearchOpen(false);
+                    }}
                     className="d-flex align-items-center gap-2 px-2 py-2 text-decoration-none"
                     style={{ color: "var(--rl-text)" }}
                   >
@@ -487,6 +582,7 @@ export default function Home() {
                 <div key={anime.id} className="h-100">
                   <Link
                     href={`/anime/${anime.id}`}
+                    onClick={() => markBackTarget("/")}
                     className="text-decoration-none"
                     aria-label={anime.title.english || anime.title.romaji}
                   >

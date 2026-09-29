@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Star,
@@ -70,11 +70,47 @@ function countdown(secs) {
 
 export default function AnimeDetail() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id;
   const [anime, setAnime] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(false);
+
+  function goBack() {
+    let target = null;
+    try {
+      target = sessionStorage.getItem("kamui-back-target");
+    } catch {}
+    const here = `/anime/${id}`;
+    try {
+      // Never pop back onto a stale scroll position of this same page:
+      // push list/parent fresh (list restores its own scroll), and only
+      // use history for search so its query state is preserved.
+      if (target && target !== here) {
+        if (target === "/" || target.startsWith("/anime/")) {
+          router.push(target);
+          return;
+        }
+        if (window.history.length > 1) {
+          router.back();
+          return;
+        }
+        router.push(target);
+        return;
+      }
+      if (window.history.length > 1) router.back();
+      else router.push("/");
+    } catch {
+      router.push("/");
+    }
+  }
+
+  function markParent() {
+    try {
+      sessionStorage.setItem("kamui-back-target", `/anime/${id}`);
+    } catch {}
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -160,9 +196,9 @@ export default function AnimeDetail() {
   if (error || !anime) {
     return (
       <div className="container py-5" style={{ color: "var(--rl-text)" }}>
-        <Link href="/" className="btn btn-sm theme-toggle text-decoration-none mb-4 d-inline-flex align-items-center gap-2">
+        <button onClick={goBack} className="btn btn-sm theme-toggle mb-4 d-inline-flex align-items-center gap-2">
           <ArrowLeft size={14} /> Back to list
-        </Link>
+        </button>
         <div className="p-4" style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}>
           <p className="fw-semibold mb-1">Couldn&apos;t load this anime.</p>
           <p className="small mb-0" style={{ color: "var(--rl-muted)" }}>{error}</p>
@@ -213,15 +249,15 @@ export default function AnimeDetail() {
           }}
         />
         <div className="container position-relative" style={{ paddingTop: 16, zIndex: 3 }}>
-          <Link href="/" className="btn btn-sm theme-toggle text-decoration-none d-inline-flex align-items-center gap-2">
+          <button onClick={goBack} className="btn btn-sm theme-toggle d-inline-flex align-items-center gap-2">
             <ArrowLeft size={14} /> Back to list
-          </Link>
+          </button>
         </div>
       </div>
 
-      {/* Details begin along the fade — title kept clear of the poster */}
+      {/* Details begin along the fade — title starts near the poster top */}
       <div className="container" style={{ marginTop: "-7rem", position: "relative", zIndex: 2 }}>
-        <div className="row g-3 g-md-4">
+        <div className="row g-3 g-md-4 align-items-start">
           <div className="col-5 col-md-3 col-lg-2">
             <img
               src={anime.coverImage.extraLarge || anime.coverImage.large}
@@ -240,7 +276,7 @@ export default function AnimeDetail() {
               }}
             />
           </div>
-          <div className="col-7 col-md-9 col-lg-10" style={{ paddingTop: "7.5rem" }}>
+          <div className="col-7 col-md-9 col-lg-10" style={{ paddingTop: "0.5rem" }}>
             <p className="font-eyebrow mb-1 d-flex align-items-center gap-2" style={{ color: "var(--rl-accent)" }}>
               <Tv size={13} />
               {anime.format?.replace(/_/g, " ") ?? "Anime"}
@@ -325,9 +361,8 @@ export default function AnimeDetail() {
               <h5 className="fw-bold title mb-3 d-flex align-items-center gap-2">
                 <Layers size={16} style={{ color: "var(--rl-accent)" }} /> Details
               </h5>
-              <div className="d-flex flex-column gap-3">
+              <div className="d-flex flex-column gap-2">
                 <Stat icon={Star} label="Average score" value={anime.averageScore ? `${anime.averageScore} / 100` : "N/A"} />
-                <Stat icon={Trophy} label="Mean score" value={anime.meanScore ?? "—"} />
                 <Stat icon={Tv} label="Episodes" value={anime.episodes ?? "?"} />
                 <Stat icon={Clock} label="Duration" value={anime.duration ? `${anime.duration} min / ep` : "—"} />
                 <Stat icon={CalendarDays} label="Season" value={anime.season && anime.seasonYear ? `${anime.season} ${anime.seasonYear}` : "—"} />
@@ -335,9 +370,7 @@ export default function AnimeDetail() {
                 <Stat icon={BookOpen} label="Source" value={anime.source?.replace(/_/g, " ") ?? "—"} />
                 <Stat icon={Building2} label="Studios" value={studios.length ? studios.join(", ") : "—"} />
                 <Stat icon={Flame} label="Popularity" value={anime.popularity?.toLocaleString() ?? "—"} />
-                <Stat icon={Heart} label="Favourites" value={anime.favourites?.toLocaleString() ?? "—"} />
                 <Stat icon={Users} label="Aired" value={`${fmtDate(anime.startDate)} → ${fmtDate(anime.endDate)}`} />
-                {anime.hashtag && <Stat icon={Tag} label="Hashtag" value={anime.hashtag} />}
               </div>
             </div>
           </div>
@@ -387,6 +420,7 @@ export default function AnimeDetail() {
                     <Link
                       key={n.id}
                       href={`/anime/${n.id}`}
+                      onClick={markParent}
                       className="text-decoration-none flex-shrink-0"
                       style={{ width: 120 }}
                     >
