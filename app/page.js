@@ -13,12 +13,13 @@ import {
   ArrowDownWideNarrow,
 } from "lucide-react";
 import { AuroraText } from "@/components/magicui/aurora-text";
-import { HexagonBackground } from "@/components/animate-ui/components/backgrounds/hexagon";
+import { GravityStarsBackground } from "@/components/animate-ui/components/backgrounds/gravity-stars";
 
 const PAGE_SIZE = 30;
 const STATE_KEY = "kamui-list-state";
 const LIST_KEY = "kamui-anime-list";
 const SCROLL_KEY = "kamui-scroll";
+const BACK_KEY = "kamui-back-target";
 
 function readStoredState() {
   if (typeof window === "undefined") return {};
@@ -45,12 +46,20 @@ function saveScroll() {
   } catch {}
 }
 
+function markBackTarget(target) {
+  saveScroll();
+  try {
+    sessionStorage.setItem(BACK_KEY, target);
+  } catch {}
+}
+
 export default function Home() {
   const [animeList, setAnimeList] = useState(getCachedList);
   const [selectedFilters, setSelectedFilters] = useState(
     () => readStoredState().selectedFilters ?? []
   );
   const [type, setType] = useState(() => readStoredState().type ?? "All");
+  const [sort, setSort] = useState(() => readStoredState().sort ?? "recent");
   const [visibleCount, setVisibleCount] = useState(
     () => readStoredState().visibleCount ?? PAGE_SIZE
   );
@@ -124,6 +133,7 @@ export default function Home() {
           MediaListCollection(userName: $username, type: ANIME) {
             lists {
               entries {
+                updatedAt
                 media {
                   id
                   title { romaji english }
@@ -153,7 +163,11 @@ export default function Home() {
         const data = await res.json();
         const entries =
           data.data?.MediaListCollection?.lists?.flatMap((l) => l.entries) ?? [];
-        const list = entries.map((e) => e.media).filter(Boolean);
+        const list = entries
+          .map((e) =>
+            e.media ? { ...e.media, _updatedAt: e.updatedAt ?? 0 } : null
+          )
+          .filter(Boolean);
         setAnimeList(list);
         try {
           sessionStorage.setItem(LIST_KEY, JSON.stringify(list));
@@ -175,10 +189,10 @@ export default function Home() {
     try {
       sessionStorage.setItem(
         STATE_KEY,
-        JSON.stringify({ selectedFilters, type, visibleCount })
+        JSON.stringify({ selectedFilters, type, sort, visibleCount })
       );
     } catch {}
-  }, [selectedFilters, type, visibleCount]);
+  }, [selectedFilters, type, sort, visibleCount]);
 
   useEffect(() => {
     window.addEventListener("pagehide", saveScroll);
@@ -220,7 +234,7 @@ export default function Home() {
   }, [animeList]);
 
   const filtered = useMemo(() => {
-    return animeList.filter((anime) => {
+    const out = animeList.filter((anime) => {
       const matchesFilters =
         selectedFilters.length === 0 ||
         selectedFilters.every(
@@ -233,7 +247,16 @@ export default function Home() {
       const matchesType = type === "All" || anime.format === type;
       return matchesFilters && matchesType;
     });
-  }, [animeList, selectedFilters, type]);
+    const titleOf = (a) => a.title.english || a.title.romaji || "";
+    if (sort === "score") {
+      out.sort((a, b) => (b.averageScore ?? -1) - (a.averageScore ?? -1));
+    } else if (sort === "az") {
+      out.sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
+    } else {
+      out.sort((a, b) => (b._updatedAt ?? 0) - (a._updatedAt ?? 0));
+    }
+    return out;
+  }, [animeList, selectedFilters, type, sort]);
 
   function toggleFilter(filter) {
     setSelectedFilters((prev) =>
@@ -258,15 +281,29 @@ export default function Home() {
 
   return (
     <>
-      {/* Intro — full first screen over hexagon grid (hover to light cells) */}
+      {/* Intro — full first screen over gravity stars, fading into the list */}
       <section
         className="d-flex flex-column justify-content-center align-items-center text-center position-relative overflow-hidden"
         style={{ minHeight: "calc(100svh - 53px)", background: "var(--rl-bg)" }}
       >
-        <HexagonBackground
-          hexagonSize={88}
-          hexagonMargin={4}
-          className="absolute inset-0 bg-transparent dark:bg-transparent [mask-image:radial-gradient(800px_circle_at_center,white,transparent)]"
+        <GravityStarsBackground
+          starsCount={90}
+          starsOpacity={0.55}
+          movementSpeed={0.25}
+          className="absolute inset-0"
+          style={{ color: "var(--rl-accent)" }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 140,
+            background: "linear-gradient(to bottom, transparent, var(--rl-bg))",
+            pointerEvents: "none",
+          }}
         />
         <div className="px-3 d-flex flex-column align-items-center pe-none" style={{ maxWidth: 760, zIndex: 1, pointerEvents: "none" }}>
           <span
@@ -332,16 +369,32 @@ export default function Home() {
                 ` · ${selectedFilters.length} filter${selectedFilters.length > 1 ? "s" : ""} active`}
             </p>
           </div>
-          <span
-            className="badge font-badge"
-            style={{
-              background: "var(--rl-accent-soft)",
-              color: "var(--rl-accent)",
-              border: "1px solid rgba(212,74,58,.3)",
-            }}
-          >
-            {loading ? "…" : `${filtered.length} anime`}
-          </span>
+          <div className="d-flex align-items-center gap-2">
+            <select
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setVisibleCount(PAGE_SIZE);
+              }}
+              aria-label="Sort anime list"
+              className="form-select form-select-sm dark-select"
+              style={{ width: "auto" }}
+            >
+              <option value="recent">Recently updated</option>
+              <option value="score">Top rated</option>
+              <option value="az">Title A–Z</option>
+            </select>
+            <span
+              className="badge font-badge"
+              style={{
+                background: "var(--rl-accent-soft)",
+                color: "var(--rl-accent)",
+                border: "1px solid rgba(212,74,58,.3)",
+              }}
+            >
+              {loading ? "…" : `${filtered.length} anime`}
+            </span>
+          </div>
         </div>
 
         {/* Global search — any anime on AniList */}
@@ -392,7 +445,7 @@ export default function Home() {
                     key={r.id}
                     href={`/anime/${r.id}`}
                     onClick={() => {
-                      saveScroll();
+                      markBackTarget("/");
                       setSearchOpen(false);
                     }}
                     className="d-flex align-items-center gap-2 px-2 py-2 text-decoration-none"
@@ -529,7 +582,7 @@ export default function Home() {
                 <div key={anime.id} className="h-100">
                   <Link
                     href={`/anime/${anime.id}`}
-                    onClick={saveScroll}
+                    onClick={() => markBackTarget("/")}
                     className="text-decoration-none"
                     aria-label={anime.title.english || anime.title.romaji}
                   >

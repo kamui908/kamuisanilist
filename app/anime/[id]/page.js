@@ -78,12 +78,38 @@ export default function AnimeDetail() {
   const [expanded, setExpanded] = useState(false);
 
   function goBack() {
+    let target = null;
     try {
+      target = sessionStorage.getItem("kamui-back-target");
+    } catch {}
+    const here = `/anime/${id}`;
+    try {
+      // Never pop back onto a stale scroll position of this same page:
+      // push list/parent fresh (list restores its own scroll), and only
+      // use history for search so its query state is preserved.
+      if (target && target !== here) {
+        if (target === "/" || target.startsWith("/anime/")) {
+          router.push(target);
+          return;
+        }
+        if (window.history.length > 1) {
+          router.back();
+          return;
+        }
+        router.push(target);
+        return;
+      }
       if (window.history.length > 1) router.back();
       else router.push("/");
     } catch {
       router.push("/");
     }
+  }
+
+  function markParent() {
+    try {
+      sessionStorage.setItem("kamui-back-target", `/anime/${id}`);
+    } catch {}
   }
 
   useEffect(() => {
@@ -394,6 +420,7 @@ export default function AnimeDetail() {
                     <Link
                       key={n.id}
                       href={`/anime/${n.id}`}
+                      onClick={markParent}
                       className="text-decoration-none flex-shrink-0"
                       style={{ width: 120 }}
                     >

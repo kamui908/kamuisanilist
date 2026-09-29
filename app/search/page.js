@@ -51,6 +51,11 @@ function ResultCard({ anime, eager }) {
   return (
     <Link
       href={`/anime/${anime.id}`}
+      onClick={() => {
+        try {
+          sessionStorage.setItem("kamui-back-target", "/search");
+        } catch {}
+      }}
       className="text-decoration-none"
       aria-label={title}
     >

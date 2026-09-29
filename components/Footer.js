@@ -19,7 +19,7 @@ export default function Footer() {
           </p>
           <p className="small mb-0" style={{ color: "var(--rl-muted)" }}>
             A personal anime shelf powered by AniList — browse the collection
-            by genre and format, or look up any anime and open its details.
+            by genre and format, or look up any anime.
           </p>
         </div>
         <div className="d-flex align-items-start gap-2">
@@ -38,12 +38,6 @@ export default function Footer() {
             <ExternalLink size={14} /> AniList profile
           </a>
         </div>
-      </div>
-      <div
-        className="text-center small py-2"
-        style={{ borderTop: "1px solid var(--rl-border)", color: "var(--rl-muted)" }}
-      >
-        Data by AniList · Built with Next.js
       </div>
     </footer>
   );
