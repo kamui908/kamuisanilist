@@ -114,7 +114,34 @@ export default function AnimeDetail() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     async function fetchDetail() {
+      // MAL when signed in, public AniList otherwise.
+      let useMal = false;
+      try {
+        const me = await fetch("/api/auth/mal/me").then((r) => r.json());
+        useMal = !!me.signedIn;
+      } catch {
+        useMal = false;
+      }
+      if (cancelled) return;
+      if (useMal) {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/mal/anime/${encodeURIComponent(id)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Anime not found");
+          if (data.reauth) throw new Error("MAL session expired. Please sign in again.");
+          if (cancelled) return;
+          setAnime(data);
+        } catch (e) {
+          if (!cancelled) setError(e.message || "Failed to load anime");
+          if (!cancelled) setLoading(false);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
+      }
       const query = `
         query ($id: Int) {
           Media(id: $id, type: ANIME) {
@@ -179,6 +206,9 @@ export default function AnimeDetail() {
       }
     }
     fetchDetail();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (loading) {
@@ -295,7 +325,7 @@ export default function AnimeDetail() {
             </div>
             <div className="d-flex flex-wrap gap-2">
               <a href={anime.siteUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-hero text-decoration-none d-inline-flex align-items-center gap-2">
-                <ExternalLink size={14} /> AniList
+                <ExternalLink size={14} /> {anime._source === "mal" ? "MAL" : "AniList"}
               </a>
               {anime.trailer?.site === "youtube" && (
                 <a

@@ -33,14 +33,21 @@ function readStoredState() {
   }
 }
 
-function getCachedList() {
+function getCachedList(key = LIST_KEY) {
   if (typeof window === "undefined") return [];
   try {
-    const v = JSON.parse(sessionStorage.getItem(LIST_KEY));
+    const v = JSON.parse(sessionStorage.getItem(key));
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
   }
+}
+
+// Pre-MAL installs cached under the bare key — pick that up once.
+function getCachedAnilist() {
+  const namespaced = getCachedList(`${LIST_KEY}:anilist`);
+  if (namespaced.length) return namespaced;
+  return getCachedList(LIST_KEY);
 }
 
 function saveScroll() {
@@ -57,7 +64,9 @@ function markBackTarget(target) {
 }
 
 export default function Home() {
-  const [animeList, setAnimeList] = useState(getCachedList);
+  const [animeList, setAnimeList] = useState(getCachedAnilist);
+  const [malUser, setMalUser] = useState(null);
+  const source = malUser?.signedIn ? "mal" : "anilist";
   const [selectedFilters, setSelectedFilters] = useState(
     () => readStoredState().selectedFilters ?? []
   );
@@ -67,7 +76,7 @@ export default function Home() {
   const [visibleCount, setVisibleCount] = useState(
     () => readStoredState().visibleCount ?? PAGE_SIZE
   );
-  const [loading, setLoading] = useState(() => getCachedList().length === 0);
+  const [loading, setLoading] = useState(() => getCachedAnilist().length === 0);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState("light");
   const [query, setQuery] = useState("");
@@ -131,6 +140,29 @@ export default function Home() {
   }, [query]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchMalList() {
+      const key = `${LIST_KEY}:mal`;
+      try {
+        if (getCachedList(key).length === 0) setLoading(true);
+        const res = await fetch("/api/mal/list");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load MAL list");
+        if (cancelled) return;
+        setAnimeList(data);
+        try {
+          sessionStorage.setItem(key, JSON.stringify(data));
+        } catch {}
+      } catch (e) {
+        if (!cancelled && getCachedList(key).length === 0) {
+          setError(e.message || "Failed to load list");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     async function fetchData() {
       const query = `
         query ($username: String) {
@@ -157,7 +189,7 @@ export default function Home() {
       `;
 
       try {
-        if (getCachedList().length === 0) setLoading(true);
+        if (getCachedAnilist().length === 0) setLoading(true);
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -174,10 +206,10 @@ export default function Home() {
           .filter(Boolean);
         setAnimeList(list);
         try {
-          sessionStorage.setItem(LIST_KEY, JSON.stringify(list));
+          sessionStorage.setItem(`${LIST_KEY}:anilist`, JSON.stringify(list));
         } catch {}
       } catch (e) {
-        if (getCachedList().length === 0) {
+        if (getCachedAnilist().length === 0) {
           setError(e.message || "Failed to load list");
         }
       } finally {
@@ -185,7 +217,47 @@ export default function Home() {
       }
     }
 
-    fetchData();
+    async function init() {
+      // Resolve auth first so the first paint uses the right source.
+      let useMal = false;
+      try {
+        const me = await fetch("/api/auth/mal/me").then((r) => r.json());
+        if (!cancelled) {
+          setMalUser(me.signedIn ? me : { signedIn: false });
+          useMal = !!me.signedIn;
+        }
+      } catch {
+        if (!cancelled) setMalUser({ signedIn: false });
+      }
+      if (cancelled) return;
+      if (useMal) {
+        // Surface OAuth callback problems (cleaned from the URL after).
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const err = params.get("mal_error");
+          if (err) setError(`MyAnimeList sign-in failed: ${err}`);
+        } catch {}
+        fetchMalList();
+      } else {
+        fetchData();
+      }
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("mal") || params.has("mal_error")) {
+          params.delete("mal");
+          params.delete("mal_error");
+          const clean = `${window.location.pathname}${
+            params.toString() ? `?${params}` : ""
+          }${window.location.hash}`;
+          window.history.replaceState(null, "", clean);
+        }
+      } catch {}
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist filters + position so detail pages restore the exact screen
@@ -365,13 +437,25 @@ export default function Home() {
             <h2 className="fw-bold mb-1 title" style={{ fontSize: "1.75rem" }}>
               Kamui&apos;s AnimeList
             </h2>
-            <p className="mb-0 small" style={{ color: "var(--rl-muted)" }}>
+            <p className="mb-1 small" style={{ color: "var(--rl-muted)" }}>
               {loading
                 ? "Loading collection…"
                 : `${filtered.length} of ${animeList.length} showing`}
               {selectedFilters.length > 0 &&
                 ` · ${selectedFilters.length} filter${selectedFilters.length > 1 ? "s" : ""} active`}
             </p>
+            <span
+              className="badge font-badge mt-1 d-inline-block"
+              style={{
+                background: "var(--rl-accent-soft)",
+                color: "var(--rl-accent)",
+                border: "1px solid var(--rl-border)",
+              }}
+            >
+              {source === "mal"
+                ? `MAL · ${malUser?.user?.name ?? "your list"}`
+                : "AniList · public list"}
+            </span>
           </div>
           <div className="d-flex align-items-center gap-2">
             <div className="view-switch" role="group" aria-label="Switch layout">
