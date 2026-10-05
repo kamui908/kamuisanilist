@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight, Flame, LayoutGrid, List, Search, SearchX, Star } from "lucide-react";
 
@@ -46,16 +46,19 @@ async function runQuery(query, variables) {
   return data.data?.Page?.media ?? [];
 }
 
+function markSearchLeave() {
+  try {
+    sessionStorage.setItem("kamui-back-target", "/search");
+    sessionStorage.setItem("kamui-search-scroll", String(window.scrollY));
+  } catch {}
+}
+
 function ResultRow({ anime }) {
   const title = anime.title.english || anime.title.romaji;
   return (
     <Link
       href={`/anime/${anime.id}`}
-      onClick={() => {
-        try {
-          sessionStorage.setItem("kamui-back-target", "/search");
-        } catch {}
-      }}
+      onClick={markSearchLeave}
       className="text-decoration-none anime-row"
       style={{ color: "var(--rl-text)" }}
       aria-label={title}
@@ -86,11 +89,7 @@ function ResultCard({ anime, eager }) {
   return (
     <Link
       href={`/anime/${anime.id}`}
-      onClick={() => {
-        try {
-          sessionStorage.setItem("kamui-back-target", "/search");
-        } catch {}
-      }}
+      onClick={markSearchLeave}
       className="text-decoration-none"
       aria-label={title}
     >
@@ -128,8 +127,27 @@ function ResultCard({ anime, eager }) {
 }
 
 export default function SearchPage() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [query, setQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return sessionStorage.getItem("kamui-search-query") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [results, setResults] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("kamui-search-results"));
+      const q = (sessionStorage.getItem("kamui-search-query") ?? "").trim();
+      if (cached && cached.query === q) {
+        return Array.isArray(cached.results) ? cached.results : [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
   const [trending, setTrending] = useState([]);
   const [searching, setSearching] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
@@ -149,6 +167,28 @@ export default function SearchPage() {
     } catch {}
   }
 
+  // Avoid a loading flash when remounting with cached results for the same query
+  const lastFetched = useRef(
+    typeof window === "undefined"
+      ? null
+      : (() => {
+          try {
+            const cached = JSON.parse(
+              sessionStorage.getItem("kamui-search-results")
+            );
+            const q = (sessionStorage.getItem("kamui-search-query") ?? "").trim();
+            return cached &&
+              cached.query === q &&
+              Array.isArray(cached.results) &&
+              cached.results.length
+              ? q
+              : null;
+          } catch {
+            return null;
+          }
+        })()
+  );
+
   useEffect(() => {
     runQuery(TRENDING_QUERY, {})
       .then(setTrending)
@@ -158,15 +198,28 @@ export default function SearchPage() {
 
   useEffect(() => {
     const q = query.trim();
+    try {
+      sessionStorage.setItem("kamui-search-query", query);
+    } catch {}
     if (q.length < 3) {
       setResults([]);
       setSearching(false);
+      lastFetched.current = null;
       return;
     }
-    setSearching(true);
+    // Cached results for this exact query render instantly; refresh quietly
+    setSearching(lastFetched.current !== q);
     const t = setTimeout(async () => {
       try {
-        setResults(await runQuery(SEARCH_QUERY, { search: q }));
+        const fresh = await runQuery(SEARCH_QUERY, { search: q });
+        setResults(fresh);
+        lastFetched.current = q;
+        try {
+          sessionStorage.setItem(
+            "kamui-search-results",
+            JSON.stringify({ query: q, results: fresh })
+          );
+        } catch {}
       } catch {
         setResults([]);
       } finally {
@@ -178,6 +231,33 @@ export default function SearchPage() {
 
   const isSearching = query.trim().length >= 3;
   const shown = isSearching ? results : trending;
+
+  // Persist + restore scroll so detail trips return to the exact position
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    const save = () => {
+      try {
+        sessionStorage.setItem("kamui-search-scroll", String(window.scrollY));
+      } catch {}
+    };
+    window.addEventListener("pagehide", save);
+    return () => window.removeEventListener("pagehide", save);
+  }, []);
+  useEffect(() => {
+    if ((searching || loadingTrending) && shown.length === 0) return;
+    if (scrollRestored.current) return;
+    scrollRestored.current = true;
+    let y = 0;
+    try {
+      y = Number(sessionStorage.getItem("kamui-search-scroll")) || 0;
+    } catch {}
+    if (y > 0) {
+      requestAnimationFrame(() => window.scrollTo(0, y));
+      setTimeout(() => {
+        if (window.scrollY < y - 200) window.scrollTo(0, y);
+      }, 400);
+    }
+  }, [searching, loadingTrending, shown.length]);
 
   return (
     <div style={{ background: "var(--rl-bg)", color: "var(--rl-text)", minHeight: "100vh" }}>
