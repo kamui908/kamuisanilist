@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  BookmarkCheck,
+  Check,
+  Minus,
+  Pencil,
+  Play,
+  Plus,
   Star,
+  Trash2,
   Tv,
   Clock,
   CalendarDays,
@@ -16,7 +23,6 @@ import {
   Flame,
   Trophy,
   Building2,
-  Play,
   ExternalLink,
   Link2,
   GitBranch,
@@ -26,6 +32,19 @@ import {
   Tag,
   AlignLeft,
 } from "lucide-react";
+
+const MAL_STATUSES = [
+  ["watching", "Watching"],
+  ["completed", "Completed"],
+  ["on_hold", "On hold"],
+  ["dropped", "Dropped"],
+  ["plan_to_watch", "Plan to watch"],
+];
+
+function prettyMalStatus(s) {
+  const found = MAL_STATUSES.find(([v]) => v === s);
+  return found ? found[1] : (s ?? "—");
+}
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -76,6 +95,12 @@ export default function AnimeDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ status: "watching", score: 0, episodes: 0 });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   function goBack() {
     let target = null;
@@ -112,9 +137,119 @@ export default function AnimeDetail() {
     } catch {}
   }
 
+  function openEditor() {
+    const cur = anime?._myList;
+    setDraft({
+      status: cur?.status ?? "plan_to_watch",
+      score: cur?.score ?? 0,
+      episodes: cur?.episodesWatched ?? 0,
+    });
+    setEditError(null);
+    setConfirmRemove(false);
+    setEditing(true);
+  }
+
+  async function saveEntry() {
+    const total = anime?.episodes ?? null;
+    const eps = total
+      ? Math.max(0, Math.min(Number(draft.episodes) || 0, total))
+      : Math.max(0, Number(draft.episodes) || 0);
+    setSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/mal/anime/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: draft.status,
+          score: Number(draft.score) || 0,
+          num_watched_episodes: eps,
+          total,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      setAnime((a) => ({
+        ...a,
+        _myList: {
+          status: data.status ?? draft.status,
+          score: data.score ?? (Number(draft.score) || 0),
+          episodesWatched: data.num_episodes_watched ?? eps,
+          isRewatching: data.is_rewatching ?? (a._myList?.isRewatching ?? false),
+          updatedAt: data.updated_at ?? new Date().toISOString(),
+        },
+      }));
+      try {
+        sessionStorage.removeItem("kamui-anime-list:mal");
+      } catch {}
+      setEditing(false);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2500);
+    } catch (e) {
+      setEditError(e.message || "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeEntry() {
+    if (!confirmRemove) {
+      setConfirmRemove(true);
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/mal/anime/${id}/status`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 404) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Remove failed");
+      }
+      setAnime((a) => ({ ...a, _myList: null }));
+      try {
+        sessionStorage.removeItem("kamui-anime-list:mal");
+      } catch {}
+      setEditing(false);
+      setConfirmRemove(false);
+    } catch (e) {
+      setEditError(e.message || "Remove failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     async function fetchDetail() {
+      // MAL when signed in, public AniList otherwise.
+      let useMal = false;
+      try {
+        const me = await fetch("/api/auth/mal/me").then((r) => r.json());
+        useMal = !!me.signedIn;
+      } catch {
+        useMal = false;
+      }
+      if (cancelled) return;
+      if (useMal) {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/mal/anime/${encodeURIComponent(id)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Anime not found");
+          if (data.reauth) throw new Error("MAL session expired. Please sign in again.");
+          if (cancelled) return;
+          setAnime(data);
+        } catch (e) {
+          if (!cancelled) setError(e.message || "Failed to load anime");
+          if (!cancelled) setLoading(false);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
+      }
       const query = `
         query ($id: Int) {
           Media(id: $id, type: ANIME) {
@@ -179,6 +314,9 @@ export default function AnimeDetail() {
       }
     }
     fetchDetail();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (loading) {
@@ -259,22 +397,30 @@ export default function AnimeDetail() {
       <div className="container" style={{ marginTop: "-7rem", position: "relative", zIndex: 2 }}>
         <div className="row g-3 g-md-4 align-items-start">
           <div className="col-5 col-md-3 col-lg-2">
-            <img
-              src={anime.coverImage.extraLarge || anime.coverImage.large}
-              alt={title}
-              loading="eager"
-              decoding="async"
-              width="460"
-              height="613"
-              style={{
-                width: "100%",
-                aspectRatio: "3 / 4",
-                objectFit: "cover",
+            <a
+              href={anime.coverImage.extraLarge || anime.coverImage.large}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`View full poster for ${title}`}
+            >
+              <img
+                src={anime.coverImage.extraLarge || anime.coverImage.large}
+                alt={title}
+                loading="eager"
+                decoding="async"
+                width="460"
+                height="613"
+                style={{
+                  width: "100%",
+                  aspectRatio: "3 / 4",
+                  objectFit: "cover",
                 borderRadius: 14,
                 border: "1px solid var(--rl-border)",
                 boxShadow: "var(--rl-shadow)",
+                display: "block",
               }}
             />
+            </a>
           </div>
           <div className="col-7 col-md-9 col-lg-10" style={{ paddingTop: "0.5rem" }}>
             <p className="font-eyebrow mb-1 d-flex align-items-center gap-2" style={{ color: "var(--rl-accent)" }}>
@@ -285,9 +431,11 @@ export default function AnimeDetail() {
             <h1 className="fw-bold title mb-1" style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)" }}>
               {title}
             </h1>
-            {anime.title.romaji && anime.title.english && (
-              <p className="mb-2 font-alt" style={{ color: "var(--rl-muted)" }}>{anime.title.romaji}</p>
-            )}
+            {anime.title.romaji &&
+              anime.title.english &&
+              anime.title.romaji !== anime.title.english && (
+                <p className="mb-2 font-alt" style={{ color: "var(--rl-muted)" }}>{anime.title.romaji}</p>
+              )}
             <div className="d-flex flex-wrap gap-1 mb-3">
               {(anime.genres ?? []).map((g) => (
                 <span key={g} className="badge font-badge badge-accent">{g}</span>
@@ -295,7 +443,7 @@ export default function AnimeDetail() {
             </div>
             <div className="d-flex flex-wrap gap-2">
               <a href={anime.siteUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-hero text-decoration-none d-inline-flex align-items-center gap-2">
-                <ExternalLink size={14} /> AniList
+                <ExternalLink size={14} /> {anime._source === "mal" ? "MAL" : "AniList"}
               </a>
               {anime.trailer?.site === "youtube" && (
                 <a
@@ -310,6 +458,176 @@ export default function AnimeDetail() {
             </div>
           </div>
         </div>
+
+        {anime._source === "mal" ? (
+          <div
+            className="mt-3 p-3 p-md-4"
+            style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h5 className="fw-bold title mb-0 d-flex align-items-center gap-2">
+                <BookmarkCheck size={16} style={{ color: "var(--rl-accent)" }} /> My List
+              </h5>
+              {!editing && (
+                <button
+                  onClick={openEditor}
+                  className="btn btn-sm theme-toggle d-inline-flex align-items-center gap-1"
+                >
+                  <Pencil size={13} /> {anime._myList ? "Edit" : "Add to list"}
+                </button>
+              )}
+            </div>
+            {savedFlash && (
+              <p className="small mb-2 d-flex align-items-center gap-1" style={{ color: "var(--rl-accent)" }}>
+                <Check size={14} /> Saved to your MAL list.
+              </p>
+            )}
+            {!editing && anime._myList && (
+              <div className="d-flex flex-wrap gap-2 align-items-center">
+                <span className="badge font-badge badge-accent">
+                  {prettyMalStatus(anime._myList.status)}
+                </span>
+                <span className="small" style={{ color: "var(--rl-muted)" }}>
+                  Score {anime._myList.score ? `${anime._myList.score}/10` : "—"}
+                  {" · "}
+                  {anime._myList.episodesWatched}
+                  {anime.episodes ? ` / ${anime.episodes}` : ""} eps
+                </span>
+              </div>
+            )}
+            {!editing && !anime._myList && (
+              <p className="small mb-0" style={{ color: "var(--rl-muted)" }}>
+                Not on your list yet — add it with the button above.
+              </p>
+            )}
+            {editing && (
+              <div className="d-flex flex-column gap-3 mt-1">
+                <div className="row g-2">
+                  <div className="col-6 col-md-4">
+                    <label className="form-label small mb-1" style={{ color: "var(--rl-muted)" }}>Status</label>
+                    <select
+                      value={draft.status}
+                      onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+                      className="form-select form-select-sm dark-select"
+                    >
+                      {MAL_STATUSES.map(([v, label]) => (
+                        <option key={v} value={v}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <label className="form-label small mb-1" style={{ color: "var(--rl-muted)" }}>Score (0–10)</label>
+                    <div className="d-flex align-items-center gap-2">
+                      <button
+                        onClick={() => setDraft((d) => ({ ...d, score: Math.max(0, (Number(d.score) || 0) - 1) }))}
+                        className="btn btn-sm theme-toggle"
+                        aria-label="Decrease score"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="fw-semibold">{draft.score}</span>
+                      <button
+                        onClick={() => setDraft((d) => ({ ...d, score: Math.min(10, (Number(d.score) || 0) + 1) }))}
+                        className="btn btn-sm theme-toggle"
+                        aria-label="Increase score"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small mb-1" style={{ color: "var(--rl-muted)" }}>
+                      Episodes watched{anime.episodes ? ` (of ${anime.episodes})` : ""}
+                    </label>
+                    <div className="d-flex align-items-center gap-2">
+                      <button
+                        onClick={() => setDraft((d) => ({ ...d, episodes: Math.max(0, (Number(d.episodes) || 0) - 1) }))}
+                        className="btn btn-sm theme-toggle"
+                        aria-label="Decrease episodes"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="fw-semibold">{draft.episodes}</span>
+                      <button
+                        onClick={() =>
+                          setDraft((d) => ({
+                            ...d,
+                            episodes: anime.episodes
+                              ? Math.min(anime.episodes, (Number(d.episodes) || 0) + 1)
+                              : (Number(d.episodes) || 0) + 1,
+                          }))
+                        }
+                        className="btn btn-sm theme-toggle"
+                        aria-label="Increase episodes"
+                      >
+                        <Plus size={14} />
+                      </button>
+                      {anime.episodes > 0 && (
+                        <button
+                          onClick={() =>
+                            setDraft((d) => ({ ...d, status: "completed", episodes: anime.episodes }))
+                          }
+                          className="btn btn-sm theme-toggle"
+                        >
+                          All
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {editError && (
+                  <p className="small mb-0" style={{ color: "#d44a3a" }}>{editError}</p>
+                )}
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    onClick={saveEntry}
+                    disabled={saving}
+                    className="btn btn-sm btn-hero d-inline-flex align-items-center gap-1"
+                  >
+                    <Check size={14} /> {saving ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditing(false);
+                      setConfirmRemove(false);
+                      setEditError(null);
+                    }}
+                    className="btn btn-sm theme-toggle"
+                  >
+                    Cancel
+                  </button>
+                  {anime._myList && (
+                    <button
+                      onClick={removeEntry}
+                      disabled={saving}
+                      className="btn btn-sm theme-toggle d-inline-flex align-items-center gap-1 ms-auto"
+                      style={confirmRemove ? { borderColor: "#d44a3a", color: "#d44a3a" } : undefined}
+                    >
+                      <Trash2 size={14} />
+                      {confirmRemove ? "Tap again to confirm" : "Remove"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            className="mt-3 p-3 d-flex flex-wrap align-items-center gap-2"
+            style={{ background: "var(--rl-elev-1)", border: "1px solid var(--rl-border)", borderRadius: 12 }}
+          >
+            <BookmarkCheck size={16} style={{ color: "var(--rl-accent)" }} />
+            <span className="small" style={{ color: "var(--rl-muted)" }}>
+              Sign in with MAL to track this anime on your own list.
+            </span>
+            <a
+              href="/api/auth/mal/login"
+              className="btn btn-sm theme-toggle text-decoration-none ms-auto"
+            >
+              Sign in
+            </a>
+          </div>
+        )}
 
         {airing && (
           <div
