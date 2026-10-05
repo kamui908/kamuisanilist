@@ -1,5 +1,6 @@
 import "@/styles/bootstrap.min.css"; // local bootstrap
 import "@/styles/globals.css";
+import Script from "next/script";
 import Topbar from "@/components/Topbar";
 import Footer from "@/components/Footer";
 
@@ -19,9 +20,11 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
           rel="stylesheet"
         />
-        <script
+        <Script
+          id="rl-theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("rl-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t);if(t==="dark")document.documentElement.classList.add("dark")}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
+            __html: `(function(){try{var t=localStorage.getItem("rl-theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t);if(t==="dark"){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
           }}
         />
       </head>

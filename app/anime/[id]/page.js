@@ -289,22 +289,30 @@ export default function AnimeDetail() {
       <div className="container" style={{ marginTop: "-7rem", position: "relative", zIndex: 2 }}>
         <div className="row g-3 g-md-4 align-items-start">
           <div className="col-5 col-md-3 col-lg-2">
-            <img
-              src={anime.coverImage.extraLarge || anime.coverImage.large}
-              alt={title}
-              loading="eager"
-              decoding="async"
-              width="460"
-              height="613"
-              style={{
-                width: "100%",
-                aspectRatio: "3 / 4",
-                objectFit: "cover",
+            <a
+              href={anime.coverImage.extraLarge || anime.coverImage.large}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`View full poster for ${title}`}
+            >
+              <img
+                src={anime.coverImage.extraLarge || anime.coverImage.large}
+                alt={title}
+                loading="eager"
+                decoding="async"
+                width="460"
+                height="613"
+                style={{
+                  width: "100%",
+                  aspectRatio: "3 / 4",
+                  objectFit: "cover",
                 borderRadius: 14,
                 border: "1px solid var(--rl-border)",
                 boxShadow: "var(--rl-shadow)",
+                display: "block",
               }}
             />
+            </a>
           </div>
           <div className="col-7 col-md-9 col-lg-10" style={{ paddingTop: "0.5rem" }}>
             <p className="font-eyebrow mb-1 d-flex align-items-center gap-2" style={{ color: "var(--rl-accent)" }}>
@@ -315,9 +323,11 @@ export default function AnimeDetail() {
             <h1 className="fw-bold title mb-1" style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)" }}>
               {title}
             </h1>
-            {anime.title.romaji && anime.title.english && (
-              <p className="mb-2 font-alt" style={{ color: "var(--rl-muted)" }}>{anime.title.romaji}</p>
-            )}
+            {anime.title.romaji &&
+              anime.title.english &&
+              anime.title.romaji !== anime.title.english && (
+                <p className="mb-2 font-alt" style={{ color: "var(--rl-muted)" }}>{anime.title.romaji}</p>
+              )}
             <div className="d-flex flex-wrap gap-1 mb-3">
               {(anime.genres ?? []).map((g) => (
                 <span key={g} className="badge font-badge badge-accent">{g}</span>

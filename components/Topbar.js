@@ -17,7 +17,20 @@ export default function Topbar() {
   const [auth, setAuth] = useState(null);
 
   useEffect(() => {
-    setTheme(document.documentElement.getAttribute("data-theme") || "light");
+    // Re-assert stored theme on the root element — belt and suspenders next
+    // to the beforeInteractive init script so refreshes never drop it.
+    try {
+      const stored = localStorage.getItem("rl-theme");
+      if (stored === "dark" || stored === "light") {
+        document.documentElement.setAttribute("data-theme", stored);
+        document.documentElement.classList.toggle("dark", stored === "dark");
+        setTheme(stored);
+      } else {
+        setTheme(document.documentElement.getAttribute("data-theme") || "light");
+      }
+    } catch {
+      setTheme(document.documentElement.getAttribute("data-theme") || "light");
+    }
     fetch("/api/auth/mal/me")
       .then((r) => r.json())
       .then((me) => setAuth(me.signedIn ? me : { signedIn: false }))

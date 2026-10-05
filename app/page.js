@@ -64,19 +64,17 @@ function markBackTarget(target) {
 }
 
 export default function Home() {
-  const [animeList, setAnimeList] = useState(getCachedAnilist);
+  // NOTE: initial values must not touch storage — SSR HTML has to match the
+  // first client render. Persisted state is restored in the mount effect below.
+  const [animeList, setAnimeList] = useState([]);
   const [malUser, setMalUser] = useState(null);
   const source = malUser?.signedIn ? "mal" : "anilist";
-  const [selectedFilters, setSelectedFilters] = useState(
-    () => readStoredState().selectedFilters ?? []
-  );
-  const [type, setType] = useState(() => readStoredState().type ?? "All");
-  const [sort, setSort] = useState(() => readStoredState().sort ?? "recent");
-  const [view, setView] = useState(() => readStoredState().view ?? "grid");
-  const [visibleCount, setVisibleCount] = useState(
-    () => readStoredState().visibleCount ?? PAGE_SIZE
-  );
-  const [loading, setLoading] = useState(() => getCachedAnilist().length === 0);
+  const [selectedFilters, setSelectedFilters] = useState([]);
+  const [type, setType] = useState("All");
+  const [sort, setSort] = useState("recent");
+  const [view, setView] = useState("grid");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState("light");
   const [query, setQuery] = useState("");
@@ -93,7 +91,8 @@ export default function Home() {
     return () => window.removeEventListener("rl-theme", onTheme);
   }, []);
 
-  // Global AniList search — independent of my list, debounced type-ahead
+  // Type-ahead search — MAL ids when signed in (so details resolve),
+  // otherwise public AniList search.
   useEffect(() => {
     const q = query.trim();
     if (q.length < 3) {
@@ -103,8 +102,19 @@ export default function Home() {
       return;
     }
     setSearching(true);
+    const malMode = source === "mal";
     const t = setTimeout(async () => {
       try {
+        if (malMode) {
+          const res = await fetch(
+            `/api/mal/search?q=${encodeURIComponent(q)}&limit=8`
+          );
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Search failed");
+          setResults(data);
+          setSearchOpen(true);
+          return;
+        }
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -137,7 +147,7 @@ export default function Home() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, source]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +228,8 @@ export default function Home() {
     }
 
     async function init() {
-      // Resolve auth first so the first paint uses the right source.
+      // Restore persisted UI + prime the active source's cache first, so the
+      // post-hydration paint lands directly on the restored screen.
       let useMal = false;
       try {
         const me = await fetch("/api/auth/mal/me").then((r) => r.json());
@@ -229,6 +240,21 @@ export default function Home() {
       } catch {
         if (!cancelled) setMalUser({ signedIn: false });
       }
+      if (cancelled) return;
+      try {
+        const s = readStoredState();
+        if (Array.isArray(s.selectedFilters)) setSelectedFilters(s.selectedFilters);
+        if (typeof s.type === "string") setType(s.type);
+        if (typeof s.sort === "string") setSort(s.sort);
+        if (s.view === "grid" || s.view === "list") setView(s.view);
+        if (typeof s.visibleCount === "number") setVisibleCount(s.visibleCount);
+        let pre = getCachedList(`${LIST_KEY}:${useMal ? "mal" : "anilist"}`);
+        if (!pre.length && !useMal) pre = getCachedList(LIST_KEY);
+        if (pre.length) {
+          setAnimeList(pre);
+          setLoading(false);
+        }
+      } catch {}
       if (cancelled) return;
       if (useMal) {
         // Surface OAuth callback problems (cleaned from the URL after).

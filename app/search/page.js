@@ -127,38 +127,14 @@ function ResultCard({ anime, eager }) {
 }
 
 export default function SearchPage() {
-  const [query, setQuery] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return sessionStorage.getItem("kamui-search-query") ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const [results, setResults] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const cached = JSON.parse(sessionStorage.getItem("kamui-search-results"));
-      const q = (sessionStorage.getItem("kamui-search-query") ?? "").trim();
-      if (cached && cached.query === q) {
-        return Array.isArray(cached.results) ? cached.results : [];
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  });
+  // NOTE: storage-free initial values so SSR HTML matches first client render.
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
   const [trending, setTrending] = useState([]);
   const [searching, setSearching] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
-  const [view, setView] = useState(() => {
-    if (typeof window === "undefined") return "grid";
-    try {
-      return sessionStorage.getItem("kamui-search-view") ?? "grid";
-    } catch {
-      return "grid";
-    }
-  });
+  const [view, setView] = useState("grid");
+  const [malMode, setMalMode] = useState(false);
 
   function changeView(next) {
     setView(next);
@@ -168,33 +144,60 @@ export default function SearchPage() {
   }
 
   // Avoid a loading flash when remounting with cached results for the same query
-  const lastFetched = useRef(
-    typeof window === "undefined"
-      ? null
-      : (() => {
-          try {
-            const cached = JSON.parse(
-              sessionStorage.getItem("kamui-search-results")
-            );
-            const q = (sessionStorage.getItem("kamui-search-query") ?? "").trim();
-            return cached &&
-              cached.query === q &&
-              Array.isArray(cached.results) &&
-              cached.results.length
-              ? q
-              : null;
-          } catch {
-            return null;
-          }
-        })()
-  );
+  const lastFetched = useRef(null);
 
+  // Restore persisted search state after the hydration-safe first paint.
+  // Runs before the trending/search effects below (declaration order).
+  const restored = useRef(false);
   useEffect(() => {
-    runQuery(TRENDING_QUERY, {})
+    if (restored.current) return;
+    restored.current = true;
+    try {
+      const v = sessionStorage.getItem("kamui-search-view");
+      if (v === "grid" || v === "list") setView(v);
+      const q = sessionStorage.getItem("kamui-search-query") ?? "";
+      if (q) {
+        setQuery(q);
+        const cached = JSON.parse(
+          sessionStorage.getItem("kamui-search-results")
+        );
+        if (
+          cached &&
+          cached.query === q.trim() &&
+          Array.isArray(cached.results) &&
+          cached.results.length
+        ) {
+          setResults(cached.results);
+          lastFetched.current = q.trim();
+        }
+      }
+    } catch {}
+    fetch("/api/auth/mal/me")
+      .then((r) => r.json())
+      .then((me) => {
+        if (me.signedIn) setMalMode(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadedMode = useRef(null);
+  useEffect(() => {
+    const mode = malMode ? "mal" : "anilist";
+    if (loadedMode.current === mode) return;
+    loadedMode.current = mode;
+    setLoadingTrending(true);
+    const load = malMode
+      ? fetch("/api/mal/search?limit=12").then(async (r) => {
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || "Search failed");
+          return data;
+        })
+      : runQuery(TRENDING_QUERY, {});
+    load
       .then(setTrending)
       .catch(() => setTrending([]))
       .finally(() => setLoadingTrending(false));
-  }, []);
+  }, [malMode]);
 
   useEffect(() => {
     const q = query.trim();
@@ -209,9 +212,19 @@ export default function SearchPage() {
     }
     // Cached results for this exact query render instantly; refresh quietly
     setSearching(lastFetched.current !== q);
+    const malSearch = malMode;
     const t = setTimeout(async () => {
       try {
-        const fresh = await runQuery(SEARCH_QUERY, { search: q });
+        // MAL mode must use MAL ids or the detail page 404s.
+        const fresh = malSearch
+          ? await fetch(
+              `/api/mal/search?q=${encodeURIComponent(q)}&limit=24`
+            ).then(async (r) => {
+              const data = await r.json();
+              if (!r.ok) throw new Error(data.error || "Search failed");
+              return data;
+            })
+          : await runQuery(SEARCH_QUERY, { search: q });
         setResults(fresh);
         lastFetched.current = q;
         try {
@@ -227,7 +240,7 @@ export default function SearchPage() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, malMode]);
 
   const isSearching = query.trim().length >= 3;
   const shown = isSearching ? results : trending;
@@ -290,7 +303,9 @@ export default function SearchPage() {
             ? searching
               ? "Searching AniList…"
               : `${results.length} result${results.length === 1 ? "" : "s"} — click any card for details`
-            : "Trending now on AniList — or type above to find anything."}
+            : malMode
+              ? "Top airing on MyAnimeList — or type above to find anything."
+              : "Trending now on AniList — or type above to find anything."}
         </p>
 
         {!isSearching && (
