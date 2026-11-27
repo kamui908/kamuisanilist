@@ -203,7 +203,7 @@ export default function Home() {
         const res = await fetch("https://graphql.anilist.co", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, variables: { username: "RyouGura" } }),
+          body: JSON.stringify({ query, variables: { username: "kamui908" } }),
         });
         if (!res.ok) throw new Error(`AniList responded ${res.status}`);
         const data = await res.json();
