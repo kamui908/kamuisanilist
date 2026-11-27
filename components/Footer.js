@@ -19,7 +19,10 @@ export default function Footer() {
           </p>
           <p className="small mb-0" style={{ color: "var(--rl-muted)" }}>
             A personal anime shelf powered by AniList — browse the collection
-            by genre and format, or look up any anime.
+            by genre and format or look up any anime.
+          </p>
+          <p className="small mb-0" style={{ color: "var(--rl-muted)" }}>
+            made with ❤️ by akchris
           </p>
         </div>
         <div className="d-flex align-items-start gap-2">
@@ -30,7 +33,7 @@ export default function Footer() {
             <Search size={14} /> Search anime
           </Link>
           <a
-            href="https://anilist.co/user/RyouGura"
+            href="https://anilist.co/user/kamui908"
             target="_blank"
             rel="noreferrer"
             className="theme-toggle text-decoration-none d-inline-flex align-items-center gap-2"
